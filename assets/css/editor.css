@@ -89,11 +89,6 @@ html.pencil-selection-active #wpadminbar {
 	outline: none;
 }
 
-.pencil-client-logout{--pencil-danger:#b42332;display:none;position:fixed;right:22px;bottom:22px;z-index:2147483000;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid var(--pencil-border);border-radius:999px;background:var(--pencil-panel);color:var(--pencil-danger);box-shadow:0 2px 8px rgba(33,26,52,.08);font:inherit;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap}
-html.pencil-selection-active .pencil-client-logout{display:inline-flex}
-.pencil-client-logout:hover{background:var(--pencil-subtle);color:var(--pencil-danger)}
-.pencil-client-logout:focus-visible{outline:2px solid var(--pencil-danger);outline-offset:3px}
-@media(max-width:480px){.pencil-client-logout{right:12px;bottom:76px}}
 
 .pencil-toolbar__select:focus-visible {
 	box-shadow: none;
@@ -176,65 +171,7 @@ html.pencil-media-open .media-modal .media-frame {
 	transition: inset 80ms ease, width 80ms ease, height 80ms ease;
 }
 
-.pencil-highlight__label {
-	position: absolute;
-	top: -30px;
-	left: 0;
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	max-width: min(420px, calc(100vw - 32px));
-	min-height: 28px;
-	padding: 4px 5px 4px 9px;
-	border-radius: 6px;
-	background: var(--pencil-accent);
-	color: var(--pencil-panel);
-	font-size: 12px;
-	font-weight: 650;
-	line-height: 18px;
-	white-space: nowrap;
-}
-
-.pencil-highlight__text {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.pencil-highlight__action {
-	flex: none;
-	min-height: 20px;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: var(--pencil-panel);
-	color: var(--pencil-accent-hover);
-	pointer-events: auto;
-	text-decoration: none;
-}
-
-.pencil-highlight__action:hover,
-.pencil-highlight__action:focus-visible {
-	background: var(--pencil-subtle);
-	color: var(--pencil-accent-hover);
-	outline: 2px solid var(--pencil-panel);
-	outline-offset: 2px;
-}
-
-.pencil-highlight--managed {
-	border-style: dashed;
-	border-color: var(--pencil-muted);
-}
-
-.pencil-highlight--managed .pencil-highlight__label {
-	top: 0;
-	left: 0;
-	background: var(--pencil-muted);
-}
-
-.pencil-highlight--label-inside .pencil-highlight__label {
-	top: 6px;
-	left: 6px;
-}
+.pencil-highlight--indirect { border-color: var(--pencil-muted); }
 
 /* Keep the pencil over page content, including layout containers and field children. */
 html.pencil-selection-active:not(.pencil-media-open) body,
@@ -245,15 +182,6 @@ html.pencil-selection-active:not(.pencil-media-open) body > :not(:where(.pencil-
 html.pencil-selection-active:not(.pencil-media-open) body > :not(:where(.pencil-ui, #wpadminbar)) *::before,
 html.pencil-selection-active:not(.pencil-media-open) body > :not(:where(.pencil-ui, #wpadminbar)) *::after {
 	cursor: url("../img/cursor.svg") 5 19, pointer !important;
-}
-
-html.pencil-selection-active body [data-pencil-managed],
-html.pencil-selection-active body [data-pencil-managed] *,
-html.pencil-selection-active body [data-pencil-managed]::before,
-html.pencil-selection-active body [data-pencil-managed]::after,
-html.pencil-selection-active body [data-pencil-managed] *::before,
-html.pencil-selection-active body [data-pencil-managed] *::after {
-	cursor: auto !important;
 }
 
 .pencil-popup {
@@ -269,11 +197,15 @@ html.pencil-selection-active body [data-pencil-managed] *::after {
 }
 
 .pencil-popup__label {
-	display: block;
-	margin: 0 0 10px;
-	color: var(--pencil-ink);
-	font-size: 13px;
-	font-weight: 650;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	border: 0;
+	white-space: nowrap;
 }
 
 .pencil-popup__input {
@@ -575,11 +507,100 @@ html.pencil-selection-active body [data-pencil-managed] *::after {
 
 /* v2: edit or leave private feedback in the existing popup. */
 .pencil-popup{max-height:calc(100dvh - 32px);overflow:auto}
-.pencil-popup__switch{display:flex;gap:4px;padding:4px;background:var(--pencil-subtle);border-radius:8px;margin-bottom:14px}
-.pencil-popup__switch button{appearance:none;flex:1;margin:0;border:0;padding:8px;border-radius:6px;background:transparent;color:var(--pencil-muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.pencil-popup__switch button[aria-selected="true"]{background:var(--pencil-panel);color:var(--pencil-accent);box-shadow:0 2px 8px var(--pencil-focus)}
-.pencil-popup__switch button:focus-visible{outline:2px solid var(--pencil-accent);outline-offset:2px}.pencil-popup__switch button:disabled{opacity:.5;cursor:default}
-.pencil-popup__comment textarea{min-height:110px;resize:vertical}.pencil-popup__hint{margin:10px 0;color:var(--pencil-muted);font-size:12px;line-height:1.6}.pencil-popup__note{white-space:pre-wrap;margin:12px 0;font-size:14px;line-height:1.6}.pencil-popup__managed a{text-decoration:none;display:inline-flex;margin-bottom:10px}
+
+
+
+
+.pencil-popup__comment textarea{min-height:110px;resize:vertical}.pencil-popup__hint{margin:10px 0;color:var(--pencil-muted);font-size:12px;line-height:1.6}.pencil-popup__note{white-space:pre-wrap;margin:12px 0;font-size:14px;line-height:1.6}
 .pencil-markers{position:fixed;inset:0;z-index:2147483000;pointer-events:none}
 .pencil-comment-marker{appearance:none;position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;pointer-events:auto;width:30px;height:30px;padding:0;margin:0;border:2px solid var(--pencil-panel);border-radius:50%;background:var(--pencil-accent);color:var(--pencil-panel);box-shadow:0 4px 12px var(--pencil-focus);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .pencil-comment-marker:focus-visible{outline:3px solid var(--pencil-accent);outline-offset:3px}html.pencil-media-open .pencil-markers{visibility:hidden}
+
+/* Hidden states: elements with the pencil-reveal class and the hidden attribute are shown
+   while the editor switched them on in Pencilino > Settings. Themes may set --pencil-reveal-color. */
+body.pencil-show-hidden .pencil-reveal[hidden] {
+	display: block;
+	outline: 1px dashed var(--pencil-reveal-color, #7C3AED);
+	outline-offset: 4px;
+	opacity: 0.8;
+}
+
+/* Provider editors in a popup */
+html.pencil-modal-open{overflow:hidden}
+.pencil-modal{position:fixed;inset:0;z-index:2147483002;display:flex;align-items:center;justify-content:center;padding:24px}
+.pencil-modal[hidden]{display:none}
+.pencil-modal__backdrop{position:absolute;inset:0;background:rgba(33,26,52,.55)}
+.pencil-modal__dialog{position:relative;display:flex;flex-direction:column;width:min(1100px,100%);height:min(900px,100%);background:var(--pencil-panel);border-radius:14px;box-shadow:0 16px 48px rgba(33,26,52,.3);overflow:hidden}
+.pencil-modal__header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px 12px 20px;border-bottom:1px solid var(--pencil-border)}
+.pencil-modal__title{margin:0;padding:0;font-size:15px;font-weight:600;line-height:1.3;color:var(--pencil-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pencil-modal__actions{display:flex;align-items:center;flex:none;gap:8px}
+.pencil-modal__close{display:inline-grid;place-items:center;flex:none;width:40px;height:40px;padding:0;border:1px solid var(--pencil-border);border-radius:8px;background:var(--pencil-panel);color:var(--pencil-ink);cursor:pointer}
+.pencil-modal__close:hover{border-color:var(--pencil-accent)}
+.pencil-modal__save{flex:none;min-height:40px;padding:0 20px;border:0;border-radius:8px;background:var(--pencil-accent);color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.pencil-modal__save[hidden]{display:none}
+.pencil-modal__save:hover{background:var(--pencil-accent-hover)}
+.pencil-modal__close:focus-visible,.pencil-modal__save:focus-visible{outline:3px solid var(--pencil-focus);outline-offset:2px}
+.pencil-modal__body{position:relative;flex:1;min-height:0}
+.pencil-modal__frame{display:block;width:100%;height:100%;border:0;background:#fff}
+.pencil-modal__loading{position:absolute;inset:0;display:grid;place-items:center;margin:0;background:var(--pencil-panel);color:var(--pencil-muted)}
+.pencil-modal__loading[hidden]{display:none}
+@media(max-width:782px){.pencil-modal{padding:0}.pencil-modal__dialog{width:100%;height:100%;border-radius:0}}
+
+/* Popup: small tabs, no title, one close button. */
+.pencil-popup{padding:12px 14px 14px}
+.pencil-popup__header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px}
+.pencil-popup__switch{display:flex;gap:4px}
+.pencil-popup__switch button{appearance:none;display:inline-flex;align-items:center;gap:5px;margin:0;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:var(--pencil-muted);font:inherit;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer}
+.pencil-popup__switch button[hidden]{display:none}
+.pencil-popup__switch button .dashicons{width:16px;height:16px;font-size:16px}
+.pencil-popup__switch button:hover{background:var(--pencil-subtle);color:var(--pencil-ink)}
+.pencil-popup__switch button[aria-selected="true"]{background:var(--pencil-subtle);background:color-mix(in srgb,var(--pencil-accent) 12%,var(--pencil-panel));color:var(--pencil-accent-hover)}
+.pencil-popup__switch button:focus-visible{outline:2px solid var(--pencil-accent);outline-offset:2px}
+.pencil-popup__close{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:8px;background:transparent;color:var(--pencil-muted);cursor:pointer}
+.pencil-popup__close:hover{background:var(--pencil-subtle);color:var(--pencil-ink)}
+.pencil-popup__close:focus-visible{outline:2px solid var(--pencil-accent);outline-offset:2px}
+.pencil-popup__managed-field{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:42px;padding:10px 12px;border:1px solid var(--pencil-border);border-radius:8px;background:color-mix(in srgb,var(--pencil-ink) 6%,var(--pencil-panel));color:var(--pencil-muted);font-size:14px;line-height:1.5;text-decoration:none}
+.pencil-popup__managed-field[hidden]{display:none}
+.pencil-popup__managed-field .dashicons{flex:none;color:var(--pencil-accent)}
+.pencil-popup__managed-field:hover,.pencil-popup__managed-field:focus-visible{border-color:var(--pencil-accent);color:var(--pencil-ink);outline:none}
+.pencil-popup__managed-field:focus-visible{box-shadow:0 0 0 3px var(--pencil-focus)}
+.pencil-popup__actions:has(> [data-pencil-save][hidden]){display:none}
+
+/* Popup: safe from theme rules for section, header, h2 and iframe. */
+.pencil-modal__dialog { margin:0;padding:0;border:0 }
+.pencil-modal__header { margin:0;min-height:0;height:auto }
+.pencil-modal__title { font-family:inherit;letter-spacing:normal;text-transform:none }
+.pencil-modal__body { margin:0;padding:0 }
+.pencil-modal__frame { max-width:none;margin:0;padding:0;aspect-ratio:auto }
+
+.pencil-modal__admin{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;box-sizing:border-box;border:1px solid var(--pencil-border);border-radius:8px;background:var(--pencil-panel);color:var(--pencil-ink);font:inherit;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
+.pencil-modal__admin[hidden]{display:none}
+.pencil-modal__admin:hover{border-color:var(--pencil-accent);color:var(--pencil-ink)}
+.pencil-modal__admin:focus-visible{outline:3px solid var(--pencil-focus);outline-offset:2px}
+.pencil-popup__actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+a.pencil-popup__button{text-decoration:none}
+a.pencil-popup__button[hidden]{display:none}
+a.pencil-popup__button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;line-height:1}
+/* Client toolbar: Dashboard or Back to website on the left, Log out on the right, also on phones. */
+#wpadminbar #wp-admin-bar-pencil-switch > .ab-item,#wpadminbar #wp-admin-bar-pencil-logout > .ab-item{display:flex;align-items:center;gap:6px}
+@media screen and (max-width:782px){#wpadminbar #wp-admin-bar-pencil-switch,#wpadminbar #wp-admin-bar-pencil-logout{display:block}#wpadminbar #wp-admin-bar-pencil-switch > .ab-item,#wpadminbar #wp-admin-bar-pencil-logout > .ab-item{height:46px;padding:0 14px;font-size:14px;line-height:46px}}
+
+/* Reading a comment: who wrote it, the text, and an Edit link for your own. */
+.pencil-popup--detail .pencil-popup__header{position:absolute;top:10px;right:10px;margin:0;z-index:1}
+.pencil-popup__who{display:flex;align-items:center;gap:10px;padding-right:36px}
+.pencil-popup__avatar{flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--pencil-accent) 14%,var(--pencil-panel));color:var(--pencil-accent-hover);font-size:12px;font-weight:700;line-height:1}
+.pencil-popup__who strong{display:block;font-size:14px;line-height:1.3;color:var(--pencil-ink)}
+.pencil-popup__who small{display:block;font-size:12px;line-height:1.4;color:var(--pencil-muted)}
+.pencil-popup__edited{cursor:help;border-bottom:1px dotted currentColor}
+.pencil-popup__detail .pencil-popup__note{margin:14px 0 8px}
+.pencil-popup__link{appearance:none;margin:0;padding:4px 0;border:0;background:none;color:var(--pencil-accent-hover);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.pencil-popup__link:hover{text-decoration:underline}
+.pencil-popup__link:focus-visible{outline:2px solid var(--pencil-accent);outline-offset:2px}
+.pencil-popup__edit{margin-top:14px}
+.pencil-popup__edit textarea{width:100%;min-height:90px;resize:vertical}
+.pencil-popup__edit-actions{display:flex;justify-content:space-between;gap:8px;margin-top:8px}
+
+.pencil-popup__edit-actions [data-pencil-comment-delete]:hover,.pencil-popup__edit-actions [data-pencil-comment-delete]:focus-visible,.pencil-popup__edit-actions [data-pencil-comment-delete][data-sure]{border-color:#b42318;color:#b42318}
+.pencil-comment-marker--other{background:var(--pencil-muted)}
+.pencil-comment-marker--other:focus-visible{outline-color:var(--pencil-muted)}
+.pencil-modal__frame[hidden]{display:none}

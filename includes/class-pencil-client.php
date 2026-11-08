@@ -1,6 +1,9 @@
 <?php
 /**
- * Client role and the simplified WordPress editing experience.
+ * Focus mode: a calmer WordPress for the users you choose.
+ *
+ * Nobody gets new rights here. Users keep their normal WordPress role (Editor,
+ * Shop manager, ...). Focus mode only changes how WordPress looks and where they land.
  *
  * @package Pencilino
  */
@@ -8,126 +11,148 @@ defined( 'ABSPATH' ) || exit;
 
 final class Pencil_Client {
 
-	const ROLE = 'pencil_client';
-	const OPTION = 'pencil_client_mode';
-	const CAPS_OPTION = 'pencil_client_capabilities';
+	const USERS_OPTION   = 'pencil_focus_users';
+	const TOOLBAR_OPTION = 'pencil_focus_toolbar';
+	const WEBSITE_OPTION = 'pencil_focus_website';
+	const MAX_RESULTS    = 8;
 
 	public static function init() {
-		add_action( 'init', array( __CLASS__, 'sync_role' ), 1000 );
+		add_action( 'init', array( __CLASS__, 'migrate_autoload' ), 1 );
+		add_action( 'init', array( __CLASS__, 'migrate_clients_role' ), 2 );
 		add_filter( 'login_redirect', array( __CLASS__, 'login_redirect' ), 10, 3 );
 		add_filter( 'login_message', array( __CLASS__, 'logged_out_message' ) );
 		add_filter( 'wp_login_errors', array( __CLASS__, 'logged_out_errors' ) );
 		add_action( 'login_enqueue_scripts', array( __CLASS__, 'login_assets' ) );
 		add_filter( 'show_admin_bar', array( __CLASS__, 'show_admin_bar' ) );
-		add_filter( 'map_meta_cap', array( __CLASS__, 'protect_pages' ), 20, 4 );
 		add_action( 'admin_init', array( __CLASS__, 'guard_admin' ), 20 );
-		add_action( 'admin_menu', array( __CLASS__, 'remove_menus' ), 999 );
+		// Last, so the toolbar keeps only what these users need, whatever other plugins add.
+		add_action( 'admin_bar_menu', array( __CLASS__, 'focus_toolbar' ), PHP_INT_MAX );
+		add_action( 'admin_menu', array( __CLASS__, 'hide_pencilino_menu' ), 999 );
 		add_filter( 'admin_body_class', array( __CLASS__, 'body_class' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
-		add_action( 'in_admin_header', array( __CLASS__, 'render_header' ) );
 		add_action( 'admin_post_pencil_save_settings', array( __CLASS__, 'save_settings' ) );
+		add_action( 'wp_ajax_pencil_focus_search', array( __CLASS__, 'ajax_search' ) );
+		add_action( 'wp_ajax_pencil_focus_users', array( __CLASS__, 'ajax_users' ) );
+		add_action( 'delete_user', array( __CLASS__, 'forget_user' ) );
 	}
 
+	/** IDs of the users who get Focus mode. */
+	public static function user_ids() {
+		static $ids = null;
+		if ( null === $ids ) {
+			$ids = array_values( array_unique( array_filter( array_map( 'absint', (array) get_option( self::USERS_OPTION, array() ) ) ) ) );
+		}
+		return $ids;
+	}
+
+	/** Whether anyone has Focus mode. */
 	public static function enabled() {
-		return (bool) get_option( self::OPTION, false );
+		return (bool) self::user_ids();
 	}
 
-	/** A role remains identifiable when client mode is disabled. */
+	/** Whether this user has Focus mode. Administrators never do, so nobody locks themselves out. */
 	public static function is_client( $user = null ) {
 		$user = $user instanceof WP_User ? $user : wp_get_current_user();
-		return in_array( self::ROLE, (array) $user->roles, true ) && ! user_can( $user, 'manage_options' );
+		return $user->exists() && in_array( (int) $user->ID, self::user_ids(), true ) && ! in_array( 'administrator', (array) $user->roles, true );
+	}
+
+	/** Who may change Pencilino itself: administrators, never users in Focus mode. */
+	public static function can_manage() {
+		return current_user_can( 'manage_options' ) && ! self::is_client();
 	}
 
 	public static function clean_admin() {
-		return self::enabled() && self::is_client();
+		return self::is_client();
 	}
 
-	/** No choices screen: use registered, frontend-facing content types. */
-	public static function editable_types() {
-		$types = array();
-		foreach ( get_post_types( array( 'show_ui' => true ), 'objects' ) as $name => $type ) {
-			if ( ! in_array( $name, array( 'page', 'attachment', 'revision' ), true ) && ( $type->public || $type->publicly_queryable ) ) {
-				$types[ $name ] = $type;
-			}
-		}
-		return $types;
+	/** The two switches. Both are on until an administrator turns them off. */
+	public static function toolbar_on() {
+		return '0' !== (string) get_option( self::TOOLBAR_OPTION, '1' );
 	}
 
-	/** Reconcile only capabilities this plugin owns, including late-registered CPTs. */
-	public static function sync_role() {
-		$role = get_role( self::ROLE );
-		if ( ! $role && ! self::enabled() ) {
+	public static function website_on() {
+		return '0' !== (string) get_option( self::WEBSITE_OPTION, '1' );
+	}
+
+	/** Settings rows: option key => label and help. */
+	public static function switch_fields() {
+		return array(
+			'toolbar' => array( __( 'Simple top bar', 'pencilino' ), __( 'Only Dashboard (or Back to website) and Log out. Off shows the normal WordPress top bar.', 'pencilino' ) ),
+			'website' => array( __( 'Start on the website', 'pencilino' ), __( 'After logging in, these users land on the website instead of the dashboard.', 'pencilino' ) ),
+		);
+	}
+
+	/**
+	 * One-time move: small settings that are read on every request load together with
+	 * the rest of WordPress's options, instead of one database lookup each.
+	 *
+	 * @return void
+	 */
+	/**
+	 * Pencilino by Rino 2.0.x had its own Clients role. Pencilino no longer uses it, so the people
+	 * who had it become Editors with Focus mode, which keeps their simple dashboard. Runs once:
+	 * when the old role is gone, this costs nothing.
+	 *
+	 * @return void
+	 */
+	public static function migrate_clients_role() {
+		if ( ! get_role( 'pencil_client' ) ) {
 			return;
 		}
-		if ( ! $role ) {
-			add_role( self::ROLE, __( 'Clients', 'pencilino-by-rino' ), array( 'read' => true ) );
-			$role = get_role( self::ROLE );
+
+		$moved = array();
+		for ( $round = 0; $round < 50; $round++ ) {
+			$ids = get_users( array( 'role' => 'pencil_client', 'fields' => 'ID', 'number' => 200 ) );
+			if ( ! $ids ) {
+				break;
+			}
+			foreach ( $ids as $id ) {
+				$user = new WP_User( (int) $id );
+				$user->remove_role( 'pencil_client' );
+				if ( ! array_intersect( array( 'administrator', 'editor' ), (array) $user->roles ) ) {
+					$user->add_role( 'editor' );
+				}
+				if ( ! in_array( 'administrator', (array) $user->roles, true ) ) {
+					$moved[] = (int) $id;
+				}
+			}
 		}
-		if ( ! $role ) {
+
+		if ( $moved ) {
+			update_option( self::USERS_OPTION, array_values( array_unique( array_merge( self::user_ids(), $moved ) ) ), true );
+			$roles = Pencil_Access::saved_roles();
+			if ( is_array( $roles ) && ! in_array( 'editor', $roles, true ) ) {
+				$roles[] = 'editor';
+				update_option( Pencil_Access::OPTION, $roles, true );
+			}
+		}
+
+		remove_role( 'pencil_client' );
+		delete_option( 'pencil_client_mode' );
+		delete_option( 'pencil_client_capabilities' );
+	}
+
+	public static function migrate_autoload() {
+		if ( get_option( 'pencil_autoload_v1' ) ) {
 			return;
 		}
-		$owned = array( 'read' );
-		if ( self::enabled() ) {
-			$owned = array( 'read', 'upload_files', 'pencil_edit_content', 'pencil_comment' );
-			$keys = array( 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'edit_private_posts', 'delete_posts', 'delete_others_posts', 'delete_published_posts', 'delete_private_posts', 'create_posts' );
-			foreach ( self::editable_types() as $type ) {
-				foreach ( $keys as $key ) {
-					if ( isset( $type->cap->$key ) && self::safe_capability( $type->cap->$key ) ) {
-						$owned[] = $type->cap->$key;
-					}
-				}
-				foreach ( get_object_taxonomies( $type->name, 'objects' ) as $taxonomy ) {
-					if ( self::safe_capability( $taxonomy->cap->assign_terms ) ) {
-						$owned[] = $taxonomy->cap->assign_terms;
-					}
-				}
-			}
+		if ( function_exists( 'wp_set_option_autoload_values' ) ) {
+			wp_set_option_autoload_values(
+				array(
+					'pencil_activity_db_version' => true,
+					'pencil_comments_db_version' => true,
+				)
+			);
 		}
-		$owned = array_values( array_unique( $owned ) );
-		sort( $owned );
-		$previous = (array) get_option( self::CAPS_OPTION, array() );
-		foreach ( array_diff( $previous, $owned ) as $cap ) {
-			$role->remove_cap( $cap );
-		}
-		foreach ( $owned as $cap ) {
-			if ( ! $role->has_cap( $cap ) ) {
-				$role->add_cap( $cap );
-			}
-		}
-		if ( $owned !== $previous ) {
-			update_option( self::CAPS_OPTION, $owned, false );
-		}
-	}
-
-	private static function safe_capability( $cap ) {
-		return is_string( $cap ) && preg_match( '/^(?:edit|delete|publish|read|create|assign)_[a-z0-9_]+$/', $cap ) && ! in_array( $cap, array( 'manage_options', 'manage_woocommerce', 'edit_theme_options', 'edit_pages', 'edit_others_pages', 'edit_published_pages', 'publish_pages', 'delete_pages', 'delete_others_pages', 'delete_published_pages', 'edit_private_pages', 'delete_private_pages', 'read_private_pages', 'unfiltered_html', 'do_not_allow' ), true ) && ! preg_match( '/(?:plugins|themes|users|network|files)$/', $cap );
-	}
-
-	/** Enforce page restrictions beyond the hidden navigation, including REST. */
-	public static function protect_pages( $caps, $cap, $user_id, $args ) {
-		if ( ! in_array( $cap, array( 'edit_post', 'delete_post', 'edit_page', 'delete_page', 'edit_post_meta', 'delete_post_meta', 'add_post_meta' ), true ) || empty( $args[0] ) ) {
-			return $caps;
-		}
-		$user = get_userdata( $user_id );
-		if ( ! $user || ! self::is_client( $user ) ) {
-			return $caps;
-		}
-		$post = get_post( $args[0] );
-		if ( $post && 'revision' === $post->post_type ) {
-			$post = get_post( $post->post_parent );
-		}
-		if ( $post && 'attachment' !== $post->post_type && ( ! self::enabled() || ! isset( self::editable_types()[ $post->post_type ] ) ) ) {
-			return array( 'do_not_allow' );
-		}
-		return $caps;
+		update_option( 'pencil_autoload_v1', '1', true );
 	}
 
 	public static function login_redirect( $redirect, $requested, $user ) {
-		return $user instanceof WP_User && self::enabled() && self::is_client( $user ) ? home_url( '/' ) : $redirect;
+		return $user instanceof WP_User && self::is_client( $user ) && self::website_on() ? home_url( '/' ) : $redirect;
 	}
 
 	public static function show_admin_bar( $show ) {
-		return self::clean_admin() ? false : $show;
+		return self::clean_admin() ? true : $show;
 	}
 
 	public static function logged_out_url() {
@@ -143,7 +168,7 @@ final class Pencil_Client {
 		if ( ! self::is_logged_out_screen() ) {
 			return $message;
 		}
-		return $message . '<div class="pencil-logged-out"><h2>' . esc_html__( 'You are logged out.', 'pencilino-by-rino' ) . '</h2><p>' . esc_html__( 'You can now view the website without Pencilino.', 'pencilino-by-rino' ) . '</p><a class="pencil-logged-out__button" href="' . esc_url( home_url( '/' ) ) . '">' . esc_html__( 'Back to website', 'pencilino-by-rino' ) . '</a></div>';
+		return $message . '<div class="pencil-logged-out"><h2>' . esc_html__( 'You are logged out.', 'pencilino' ) . '</h2><p>' . esc_html__( 'You can now view the website without Pencilino.', 'pencilino' ) . '</p><a class="pencil-logged-out__button" href="' . esc_url( home_url( '/' ) ) . '">' . esc_html__( 'Back to website', 'pencilino' ) . '</a></div>';
 	}
 
 	public static function logged_out_errors( $errors ) {
@@ -159,103 +184,175 @@ final class Pencil_Client {
 		}
 	}
 
-	/** Keep media uploads, autosaves and authenticated editor AJAX working. */
+	/** Pencilino's own admin page is for administrators; send Focus mode users to the dashboard instead. */
 	public static function guard_admin() {
-		if ( ! self::is_client() ) {
-			return;
-		}
-		if ( ! self::enabled() ) {
-			if ( ! wp_doing_ajax() ) {
-				wp_safe_redirect( home_url( '/' ) );
-				exit;
-			}
-			return;
-		}
-		if ( wp_doing_ajax() ) {
-			return; // Core handlers enforce their own capabilities and nonces.
-		}
-		global $pagenow;
-		if ( 'async-upload.php' === $pagenow ) {
-			return;
-		}
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen routing; mutations remain protected by core.
-		$post_id = isset( $_REQUEST['post'] ) ? absint( $_REQUEST['post'] ) : ( isset( $_REQUEST['post_ID'] ) ? absint( $_REQUEST['post_ID'] ) : 0 );
-		if ( $post_id ) {
-			$type = get_post_type( $post_id );
-		} else {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen routing.
-			$type = isset( $_REQUEST['post_type'] ) ? sanitize_key( wp_unslash( $_REQUEST['post_type'] ) ) : 'post';
-		}
-		$allowed = isset( self::editable_types()[ $type ] ) && in_array( $pagenow, array( 'post.php', 'post-new.php', 'edit.php' ), true );
-		if ( ! $allowed ) {
-			wp_safe_redirect( home_url( '/' ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		if ( self::clean_admin() && isset( $_GET['page'] ) && Pencil_Admin::MENU_SLUG === $_GET['page'] ) {
+			wp_safe_redirect( admin_url() );
 			exit;
 		}
 	}
 
-	public static function remove_menus() {
-		if ( self::clean_admin() ) {
-			global $menu;
-			foreach ( (array) $menu as $entry ) {
-				remove_menu_page( $entry[2] );
+	/**
+	 * Keep the WordPress toolbar, with only the way between website and dashboard on the left
+	 * and Log out on the right. On small screens WordPress adds its own menu button.
+	 */
+	public static function focus_toolbar( $bar ) {
+		if ( ! self::clean_admin() || ! self::toolbar_on() ) {
+			return;
+		}
+		foreach ( $bar->get_nodes() as $node ) {
+			if ( empty( $node->group ) && 'menu-toggle' !== $node->id ) {
+				$bar->remove_node( $node->id );
 			}
+		}
+		$in_admin = is_admin();
+		$bar->add_node(
+			array(
+				'id'    => 'pencil-switch',
+				'title' => esc_html( $in_admin ? __( 'Back to website', 'pencilino' ) : __( 'Dashboard', 'pencilino' ) ),
+				'href'  => $in_admin ? home_url( '/' ) : admin_url(),
+			)
+		);
+		$bar->add_node(
+			array(
+				'id'     => 'pencil-logout',
+				'parent' => 'top-secondary',
+				'title'  => esc_html__( 'Log out', 'pencilino' ),
+				'href'   => wp_logout_url( self::logged_out_url() ),
+			)
+		);
+	}
+
+	public static function hide_pencilino_menu() {
+		if ( self::clean_admin() ) {
+			remove_menu_page( Pencil_Admin::MENU_SLUG );
 		}
 	}
 
 	public static function body_class( $classes ) {
-		return self::clean_admin() ? $classes . ' pencil-client-admin' : $classes;
+		if ( ! self::clean_admin() ) {
+			return $classes;
+		}
+		return $classes . ' pencil-client-admin';
 	}
 
 	public static function enqueue_assets() {
 		if ( ! self::clean_admin() ) {
 			return;
 		}
-		wp_enqueue_style( 'pencil-client', PENCIL_PLUGIN_URL . 'admin/css/client.css', array(), PENCIL_VERSION );
+		// The file date as version, so caches and CDNs pick up every change.
+		wp_enqueue_style( 'pencil-client', PENCIL_PLUGIN_URL . 'admin/css/client.css', array(), Pencil_Plugin::asset_version( 'admin/css/client.css' ) );
 		$screen = get_current_screen();
 		$deps = $screen && $screen->is_block_editor() ? array( 'wp-data', 'wp-dom-ready', 'wp-preferences' ) : array();
-		wp_enqueue_script( 'pencil-client', PENCIL_PLUGIN_URL . 'admin/js/client.js', $deps, PENCIL_VERSION, true );
-		wp_localize_script( 'pencil-client', 'pencilClient', array( 'trash' => __( 'Move to trash', 'pencilino-by-rino' ), 'keep' => __( 'Keep editing', 'pencilino-by-rino' ), 'question' => __( 'Move this content to trash?', 'pencilino-by-rino' ), 'description' => __( 'You can restore it from the trash later.', 'pencilino-by-rino' ) ) );
+		wp_enqueue_script( 'pencil-client', PENCIL_PLUGIN_URL . 'admin/js/client.js', $deps, Pencil_Plugin::asset_version( 'admin/js/client.js' ), true );
+		wp_localize_script( 'pencil-client', 'pencilClient', array( 'trash' => __( 'Move to trash', 'pencilino' ), 'keep' => __( 'Keep editing', 'pencilino' ), 'question' => __( 'Move this content to trash?', 'pencilino' ), 'description' => __( 'You can restore it from the trash later.', 'pencilino' ) ) );
 	}
 
-	public static function render_header() {
-		if ( ! self::clean_admin() ) {
-			return;
+	/** One user as the picker shows it. */
+	public static function user_row( $user ) {
+		$names = wp_roles()->get_names();
+		$role  = ! empty( $user->roles ) ? reset( $user->roles ) : '';
+		return array(
+			'id'    => (int) $user->ID,
+			'name'  => $user->display_name ? $user->display_name : $user->user_login,
+			'email' => $user->user_email,
+			'role'  => isset( $names[ $role ] ) ? translate_user_role( $names[ $role ] ) : '',
+			// Their role may be switched off under Features, Access. Then they cannot edit with Pencilino.
+			'warn'  => Pencil_Access::allows( $user ) ? '' : __( 'This role has no access to Pencilino. Change it under Features, Access.', 'pencilino' ),
+		);
+	}
+
+	/** The chosen users, for the settings screen. Only these are loaded, never the whole user list. */
+	public static function chosen_users() {
+		$ids = self::user_ids();
+		if ( ! $ids ) {
+			return array();
 		}
-		$screen = get_current_screen();
-		$type = $screen ? get_post_type_object( $screen->post_type ) : null;
-		if ( ! $type ) {
-			return;
+		return array_map( array( __CLASS__, 'user_row' ), get_users( array( 'include' => $ids, 'orderby' => 'display_name', 'number' => count( $ids ) ) ) );
+	}
+
+	/** Every handler checks the nonce itself first. */
+	private static function ajax_guard() {
+		if ( ! self::can_manage() ) {
+			wp_send_json_error( array( 'message' => __( 'You cannot change these settings.', 'pencilino' ) ), 403 );
 		}
-		$back = home_url( '/' );
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only selects a validated same-site return URL.
-		if ( isset( $_GET['pencil_return'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			$back = wp_validate_redirect( esc_url_raw( wp_unslash( $_GET['pencil_return'] ) ), $back );
-			$origin = wp_parse_url( home_url( '/' ), PHP_URL_HOST );
-			if ( wp_parse_url( $back, PHP_URL_HOST ) !== $origin ) {
-				$back = home_url( '/' );
+	}
+
+	/** Search by name or email. Needs two letters, returns a handful of users and never administrators. */
+	public static function ajax_search() {
+		check_ajax_referer( 'pencil_focus', 'nonce' );
+		self::ajax_guard();
+		$term = isset( $_POST['q'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['q'] ) ) ) : '';
+		if ( strlen( $term ) < 2 ) {
+			wp_send_json_success( array( 'users' => array(), 'more' => 0 ) );
+		}
+		$query = new WP_User_Query(
+			array(
+				'search'         => '*' . $term . '*',
+				'search_columns' => array( 'user_login', 'user_email', 'display_name', 'user_nicename' ),
+				'role__not_in'   => array( 'administrator' ),
+				'exclude'        => self::user_ids(), // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- User query with a short list of IDs.
+				'orderby'        => 'display_name',
+				'number'         => self::MAX_RESULTS,
+				'count_total'    => true,
+			)
+		);
+		$users = array_map( array( __CLASS__, 'user_row' ), $query->get_results() );
+		wp_send_json_success( array( 'users' => $users, 'more' => max( 0, (int) $query->get_total() - count( $users ) ) ) );
+	}
+
+	/** Add or remove one user. */
+	public static function ajax_users() {
+		check_ajax_referer( 'pencil_focus', 'nonce' );
+		self::ajax_guard();
+		$id = isset( $_POST['user'] ) ? absint( $_POST['user'] ) : 0;
+		$do = isset( $_POST['do'] ) ? sanitize_key( wp_unslash( $_POST['do'] ) ) : '';
+		$ids = array_map( 'absint', (array) get_option( self::USERS_OPTION, array() ) );
+		if ( 'add' === $do ) {
+			$user = get_userdata( $id );
+			if ( ! $user || in_array( 'administrator', (array) $user->roles, true ) ) {
+				wp_send_json_error( array( 'message' => __( 'This user cannot be added.', 'pencilino' ) ), 400 );
 			}
+			$ids[] = $id;
+		} elseif ( 'remove' === $do ) {
+			$ids = array_diff( $ids, array( $id ) );
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Nothing to do.', 'pencilino' ) ), 400 );
 		}
-		?>
-		<header class="pencil-client-header">
-			<div class="pencil-client-brand"><img src="<?php echo esc_url( PENCIL_PLUGIN_URL . 'admin/img/pencilino-icon-color.svg' ); ?>" alt="" width="32" height="32"><strong>Pencilino</strong><span><?php esc_html_e( 'Client', 'pencilino-by-rino' ); ?></span></div>
-			<nav aria-label="<?php esc_attr_e( 'Client navigation', 'pencilino-by-rino' ); ?>">
-				<a class="pencil-client-button" href="<?php echo esc_url( add_query_arg( 'post_type', $type->name, admin_url( 'edit.php' ) ) ); ?>"><?php echo esc_html( sprintf( /* translators: %s: plural post type label. */ __( 'All %s', 'pencilino-by-rino' ), $type->labels->name ) ); ?></a>
-				<a class="pencil-client-button" href="<?php echo esc_url( add_query_arg( 'pencil-edit', '1', $back ) ); ?>"><?php esc_html_e( 'Back to website', 'pencilino-by-rino' ); ?></a>
-				<a class="pencil-client-button" href="<?php echo esc_url( wp_logout_url( self::logged_out_url() ) ); ?>"><?php esc_html_e( 'Log out', 'pencilino-by-rino' ); ?></a>
-			</nav>
-		</header>
-		<?php
+		update_option( self::USERS_OPTION, array_values( array_unique( array_map( 'absint', $ids ) ) ), true );
+		wp_send_json_success( array( 'count' => count( $ids ) ) );
+	}
+
+	/** A deleted user drops out of the list. */
+	public static function forget_user( $id ) {
+		$ids = array_map( 'absint', (array) get_option( self::USERS_OPTION, array() ) );
+		if ( in_array( (int) $id, $ids, true ) ) {
+			update_option( self::USERS_OPTION, array_values( array_diff( $ids, array( (int) $id ) ) ), true );
+		}
 	}
 
 	public static function save_settings() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You cannot change these settings.', 'pencilino-by-rino' ), '', array( 'response' => 403 ) );
+		if ( ! self::can_manage() ) {
+			wp_die( esc_html__( 'You cannot change these settings.', 'pencilino' ), '', array( 'response' => 403 ) );
 		}
 		check_admin_referer( 'pencil_save_settings' );
-		update_option( self::OPTION, ! empty( $_POST['client_mode'] ), false );
-		self::sync_role();
-		wp_safe_redirect( add_query_arg( array( 'page' => Pencil_Admin::MENU_SLUG, 'pencil-settings-saved' => '1' ), admin_url( 'admin.php' ) ) . '#settings' );
+		$group = isset( $_POST['pencil_group'] ) ? sanitize_key( wp_unslash( $_POST['pencil_group'] ) ) : '';
+		if ( 'focus' === $group ) {
+			update_option( self::TOOLBAR_OPTION, ! empty( $_POST['focus_toolbar'] ) ? '1' : '0', true );
+			update_option( self::WEBSITE_OPTION, ! empty( $_POST['focus_website'] ) ? '1' : '0', true );
+		}
+		if ( 'access' === $group ) {
+			Pencil_Access::save_from_post();
+		}
+		if ( 'view' === $group ) {
+			if ( ! empty( $_POST['show_hidden'] ) ) {
+				update_user_meta( get_current_user_id(), Pencil_Plugin::SHOW_HIDDEN_META, '1' );
+			} else {
+				delete_user_meta( get_current_user_id(), Pencil_Plugin::SHOW_HIDDEN_META );
+			}
+		}
+		wp_safe_redirect( add_query_arg( array( 'page' => Pencil_Admin::MENU_SLUG, 'pencil-settings-saved' => '1' ), admin_url( 'admin.php' ) ) . ( 'view' === $group ? '#settings-hidden' : ( 'dev' === $group ? '#settings-dev' : ( 'access' === $group ? '#settings-access' : '#settings-focus' ) ) ) );
 		exit;
 	}
 }

@@ -1,12 +1,12 @@
-/* Client shell only. Core WordPress owns editor state, uploads and saves. */
+/* Clients in the admin. Core WordPress owns editor state, uploads and saves. */
 (function () {
  'use strict';
- const header = document.querySelector('.pencil-client-header');
- if (!header || !window.pencilClient) return;
+ if (!window.pencilClient) return;
  if (window.wp?.domReady && window.wp?.data) {
   window.wp.domReady(() => { const preferences=window.wp.data.dispatch('core/preferences'); if(preferences?.set){preferences.set('core/edit-post','welcomeGuide',false);preferences.set('core/edit-post','welcomeGuideTemplate',false);} });
  }
- const back = header.querySelector('nav a:last-child');
+ // Back to website leads to the page the client came from.
+ const backLinks = [document.querySelector('#wp-admin-bar-pencil-switch > a')].filter(Boolean);
  const key = 'pencilino-client-return';
  try {
   const supplied = new URLSearchParams(location.search).get('pencil_return');
@@ -17,7 +17,7 @@
   const saved = sessionStorage.getItem(key);
   if (saved) {
    const url = new URL(saved);
-   if (url.origin === location.origin && !url.pathname.includes('/wp-admin/')) { url.searchParams.set('pencil-edit','1'); back.href = url.href; }
+   if (url.origin === location.origin && !url.pathname.includes('/wp-admin/')) { url.searchParams.delete('pencil-edit'); backLinks.forEach(link => { link.href = url.href; }); }
   }
  } catch (e) { /* Navigation still works without browser storage. */ }
  let replay = false;

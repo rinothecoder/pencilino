@@ -89,7 +89,7 @@ function pencil_internal_image_style( $args ) {
 	return implode( ';', $rules );
 }
 
-if ( ! function_exists( 'pencil_text' ) ) {
+if ( ! function_exists( 'pencilino_text' ) ) {
 	/**
 	 * Render a Pencilino-owned single-line text field.
 	 *
@@ -97,7 +97,7 @@ if ( ! function_exists( 'pencil_text' ) ) {
 	 * @param array  $args Field settings: label, default, max_length, scope.
 	 * @return void
 	 */
-	function pencil_text( $id, $args = array() ) {
+	function pencilino_text( $id, $args = array() ) {
 		$field = Pencil_Fields::register( 'text', $id, $args );
 		$attrs = pencil_internal_edit_attributes( $field );
 
@@ -111,7 +111,7 @@ if ( ! function_exists( 'pencil_text' ) ) {
 	}
 }
 
-if ( ! function_exists( 'pencil_richtext' ) ) {
+if ( ! function_exists( 'pencilino_richtext' ) ) {
 	/**
 	 * Render a Pencilino-owned rich text field with bold, italic, links, and lists.
 	 *
@@ -122,7 +122,7 @@ if ( ! function_exists( 'pencil_richtext' ) ) {
 	 * @param array  $args Field settings: label, default, max_length, class, scope.
 	 * @return void
 	 */
-	function pencil_richtext( $id, $args = array() ) {
+	function pencilino_richtext( $id, $args = array() ) {
 		$field   = Pencil_Fields::register( 'richtext', $id, $args );
 		$classes = pencil_internal_class_list( $args, array( 'pencil-richtext' ) );
 		$attrs   = pencil_internal_edit_attributes( $field );
@@ -140,7 +140,7 @@ if ( ! function_exists( 'pencil_richtext' ) ) {
 	}
 }
 
-if ( ! function_exists( 'pencil_button' ) ) {
+if ( ! function_exists( 'pencilino_button' ) ) {
 	/**
 	 * Render a Pencilino-owned link button with editable text and URL.
 	 *
@@ -153,7 +153,7 @@ if ( ! function_exists( 'pencil_button' ) ) {
 	 *                     max_length, class, target, before, after, scope.
 	 * @return void
 	 */
-	function pencil_button( $id, $args = array() ) {
+	function pencilino_button( $id, $args = array() ) {
 		$field = Pencil_Fields::register( 'button', $id, $args );
 		$value = $field['value'];
 		$attrs = pencil_internal_edit_attributes( $field );
@@ -187,7 +187,7 @@ if ( ! function_exists( 'pencil_button' ) ) {
 	}
 }
 
-if ( ! function_exists( 'pencil_image' ) ) {
+if ( ! function_exists( 'pencilino_image' ) ) {
 	/**
 	 * Render a Media Library-backed image field.
 	 *
@@ -197,7 +197,7 @@ if ( ! function_exists( 'pencil_image' ) ) {
 	 *                     object_position, scope.
 	 * @return void
 	 */
-	function pencil_image( $id, $args = array() ) {
+	function pencilino_image( $id, $args = array() ) {
 		$field         = Pencil_Fields::register( 'image', $id, $args );
 		$attachment_id = $field['value'];
 
@@ -235,32 +235,17 @@ if ( ! function_exists( 'pencil_image' ) ) {
 	}
 }
 
-if ( ! function_exists( 'pencil_managed_region_open' ) ) {
+if ( ! function_exists( 'pencilino_managed_region_open' ) ) {
 	/**
-	 * Open a read-only region owned by ACF or another content provider.
+	 * Open a region owned by another content system, such as custom fields or a shop.
 	 *
 	 * @param array $args Managed-region settings.
 	 * @return void
 	 */
-	function pencil_managed_region_open( $args = array() ) {
+	function pencilino_managed_region_open( $args = array() ) {
 		$provider = isset( $args['provider'] ) ? sanitize_key( $args['provider'] ) : 'provider';
-		$names    = array(
-			'acf'         => 'ACF',
-			'jetengine'   => 'JetEngine',
-			'woocommerce' => 'WooCommerce',
-			'wordpress'   => 'WordPress',
-		);
-		$name     = isset( $names[ $provider ] ) ? $names[ $provider ] : ucfirst( $provider );
-		$label    = isset( $args['label'] ) && $args['label']
-			? sanitize_text_field( $args['label'] )
-			: sprintf(
-				/* translators: %s: content provider name. */
-				__( 'Editable in %s', 'pencilino-by-rino' ),
-				$name
-			);
-		$action_label = isset( $args['action_label'] ) && $args['action_label']
-			? sanitize_text_field( $args['action_label'] )
-			: __( 'Edit', 'pencilino-by-rino' );
+		$label    = isset( $args['label'] ) ? sanitize_text_field( $args['label'] ) : '';
+		$field    = isset( $args['field'] ) ? preg_replace( '/[^A-Za-z0-9_:,\[\]-]/', '', (string) $args['field'] ) : '';
 		$classes  = array( 'pencil-managed-region' );
 
 		if ( ! empty( $args['class'] ) ) {
@@ -274,8 +259,10 @@ if ( ! function_exists( 'pencil_managed_region_open' ) ) {
 			class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>"
 			<?php if ( Pencil_Plugin::can_edit() ) : ?>
 				data-pencil-managed="<?php echo esc_attr( $provider ); ?>"
-				data-pencil-managed-label="<?php echo esc_attr( $label ); ?>"
-				data-pencil-managed-action-label="<?php echo esc_attr( $action_label ); ?>"
+				<?php echo $label ? 'data-pencil-managed-label="' . esc_attr( $label ) . '"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above. ?>
+				<?php if ( '' !== $field ) : ?>
+					data-pencil-managed-field="<?php echo esc_attr( $field ); ?>"
+				<?php endif; ?>
 				<?php if ( ! empty( $args['edit_url'] ) ) : ?>
 					data-pencil-managed-edit-url="<?php echo esc_url( $args['edit_url'] ); ?>"
 				<?php endif; ?>
@@ -285,13 +272,84 @@ if ( ! function_exists( 'pencil_managed_region_open' ) ) {
 	}
 }
 
-if ( ! function_exists( 'pencil_managed_region_close' ) ) {
+if ( ! function_exists( 'pencilino_managed_region_close' ) ) {
 	/**
 	 * Close a read-only provider region.
 	 *
 	 * @return void
 	 */
-	function pencil_managed_region_close() {
+	function pencilino_managed_region_close() {
 		echo '</div>';
+	}
+}
+
+if ( ! function_exists( 'pencilino_cleanup_prompt' ) ) {
+	/** The clean-up prompt for an AI agent, so a theme can show it (for example on its brand guide). Empty when Dev mode is not available. */
+	function pencilino_cleanup_prompt() {
+		return class_exists( 'Pencil_Dev' ) ? Pencil_Dev::master_prompt() : '';
+	}
+}
+
+/*
+ * Older themes call the helpers by their former pencil_ names. Those names keep working.
+ * New code uses the pencilino_ names.
+ */
+if ( ! function_exists( 'pencil_text' ) ) {
+	function pencil_text( $id, $args = array() ) {
+		return pencilino_text( $id, $args );
+	}
+}
+
+if ( ! function_exists( 'pencil_richtext' ) ) {
+	function pencil_richtext( $id, $args = array() ) {
+		return pencilino_richtext( $id, $args );
+	}
+}
+
+if ( ! function_exists( 'pencil_button' ) ) {
+	function pencil_button( $id, $args = array() ) {
+		return pencilino_button( $id, $args );
+	}
+}
+
+if ( ! function_exists( 'pencil_image' ) ) {
+	function pencil_image( $id, $args = array() ) {
+		return pencilino_image( $id, $args );
+	}
+}
+
+if ( ! function_exists( 'pencil_managed_region_open' ) ) {
+	function pencil_managed_region_open( $args = array() ) {
+		return pencilino_managed_region_open( $args );
+	}
+}
+
+if ( ! function_exists( 'pencil_managed_region_close' ) ) {
+	function pencil_managed_region_close() {
+		return pencilino_managed_region_close();
+	}
+}
+
+if ( ! function_exists( 'pencil_cleanup_prompt' ) ) {
+	function pencil_cleanup_prompt() {
+		return pencilino_cleanup_prompt();
+	}
+}
+
+if ( ! function_exists( 'pencil_seo_plugin' ) ) {
+	function pencil_seo_plugin() {
+		return pencilino_seo_plugin();
+	}
+}
+
+if ( ! function_exists( 'pencil_seo_title' ) ) {
+	function pencil_seo_title( $post_id = 0 ) {
+		return pencilino_seo_title( $post_id );
+	}
+}
+
+if ( ! function_exists( 'pencil_seo_description' ) ) {
+	function pencil_seo_description( $post_id = 0 ) {
+		return pencilino_seo_description( $post_id );
 	}
 }

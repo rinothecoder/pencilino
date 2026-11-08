@@ -9,6 +9,11 @@ defined( 'ABSPATH' ) || exit;
 
 final class Pencil_Plugin {
 	/**
+	 * User meta key: show hidden states (elements with the pencil-reveal class) while editing.
+	 */
+	const SHOW_HIDDEN_META = 'pencil_show_hidden';
+
+	/**
 	 * Register plugin hooks.
 	 *
 	 * @return void
@@ -17,28 +22,48 @@ final class Pencil_Plugin {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_routes' ) );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_editor_assets' ) );
 		add_action( 'wp_footer', array( __CLASS__, 'render_editor' ), 5 );
+		add_filter( 'body_class', array( __CLASS__, 'body_class' ) );
+	}
+
+	/**
+	 * Whether the current user chose to show hidden states.
+	 *
+	 * @return bool
+	 */
+	public static function show_hidden() {
+		return (bool) get_user_meta( get_current_user_id(), self::SHOW_HIDDEN_META, true );
+	}
+
+	/**
+	 * Add pencil-show-hidden to the body for editors who switched hidden states on.
+	 *
+	 * @param string[] $classes Body classes.
+	 * @return string[]
+	 */
+	public static function body_class( $classes ) {
+		if ( self::can_edit() && self::show_hidden() ) {
+			$classes[] = 'pencil-show-hidden';
+		}
+		return $classes;
 	}
 
 	/**
 	 * Whether the current visitor may use Pencilino.
 	 *
-	 * Administrators and Editors by default. Contributors and Authors have
+	 * Administrators and Editors by default, or the roles chosen under Features, Access. Without a choice, Contributors and Authors are left out, as they have
 	 * `edit_posts` but not `edit_pages`, so they are left out.
 	 *
 	 * @return bool
 	 */
 	public static function can_edit() {
-		$can_edit = is_user_logged_in() && ( current_user_can( 'edit_pages' ) || ( Pencil_Client::enabled() && current_user_can( 'pencil_edit_content' ) ) );
-		if ( Pencil_Client::is_client() && ! Pencil_Client::enabled() ) {
-			$can_edit = false;
-		}
+		$can_edit = is_user_logged_in() && Pencil_Access::allows( wp_get_current_user() );
 
 		/**
 		 * Filter who may open Pencilino and save content.
 		 *
 		 * @param bool $can_edit Whether the current user may edit.
 		 */
-		return (bool) apply_filters( 'pencil_can_edit', $can_edit );
+		return (bool) apply_filters( 'pencil_can_edit', apply_filters( 'pencilino_can_edit', $can_edit ) );
 	}
 
 	/**
@@ -84,7 +109,7 @@ final class Pencil_Plugin {
 		if ( ! $schema ) {
 			return new WP_Error(
 				'pencil_unknown_field',
-				__( 'This content field is no longer available.', 'pencilino-by-rino' ),
+				__( 'This content field is no longer available.', 'pencilino' ),
 				array( 'status' => 404 )
 			);
 		}
@@ -123,11 +148,24 @@ final class Pencil_Plugin {
 	}
 
 	/**
+	 * Whether the browser says this page is loaded inside a frame, such as the Pencilino popup.
+	 *
+	 * @return bool
+	 */
+	public static function in_iframe() {
+		return isset( $_SERVER['HTTP_SEC_FETCH_DEST'] ) && 'iframe' === strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_SEC_FETCH_DEST'] ) ) );
+	}
+
+	/**
 	 * Load editor-only assets for authorised users.
 	 *
 	 * @return void
 	 */
 	public static function enqueue_editor_assets() {
+		// The popup must never open another popup, so the website editor stays out of frames.
+		if ( self::in_iframe() ) {
+			return;
+		}
 		if ( ! self::can_edit() ) {
 			return;
 		}
@@ -158,20 +196,39 @@ final class Pencil_Plugin {
 				'pageId'  => get_queried_object_id(),
 				'commentsUrl' => esc_url_raw( rest_url( 'pencil/v1/comments' ) ),
 				'clientMode' => Pencil_Client::clean_admin(),
+				'popupEditing' => Pencil_Modal::enabled(),
+				// Swapping a region in place only suits themes that restart their own scripts, so a reload is the default.
+				'regionSwap' => (bool) apply_filters( 'pencilino_region_swap', false ),
 				'labels'  => array(
-					'openPencil'  => __( 'Open Pencilino', 'pencilino-by-rino' ),
-					'closePencil' => __( 'Close Pencilino', 'pencilino-by-rino' ),
-					'saved'       => __( 'Saved', 'pencilino-by-rino' ),
-					'error'       => __( 'Something went wrong. Please try again.', 'pencilino-by-rino' ),
-					'chooseImage' => __( 'Choose image', 'pencilino-by-rino' ),
-					'useImage'    => __( 'Use image', 'pencilino-by-rino' ),
-					'postComment' => __( 'Post comment', 'pencilino-by-rino' ),
-					'commentSaved' => __( 'Comment posted', 'pencilino-by-rino' ),
-					'writeComment' => __( 'Write a comment first.', 'pencilino-by-rino' ),
-					'saveChanges' => __( 'Save changes', 'pencilino-by-rino' ),
-					'section' => __( 'Page section', 'pencilino-by-rino' ),
-					'locationMissing' => __( 'The original element has changed. This comment is still saved with its page context.', 'pencilino-by-rino' ),
-					'selectText'  => __( 'Select the text you want to turn into a link first.', 'pencilino-by-rino' ),
+					'openPencil'  => __( 'Edit', 'pencilino' ),
+					'closePencil' => Pencil_Dev::allowed() ? __( 'Edit', 'pencilino' ) : __( 'Done', 'pencilino' ),
+					'saved'       => __( 'Saved', 'pencilino' ),
+					'error'       => __( 'Something went wrong. Please try again.', 'pencilino' ),
+					'chooseImage' => __( 'Choose image', 'pencilino' ),
+					'useImage'    => __( 'Use image', 'pencilino' ),
+					'postComment' => __( 'Send', 'pencilino' ),
+					'commentSaved' => __( 'Comment posted', 'pencilino' ),
+				'commentEdited' => __( 'Comment updated', 'pencilino' ),
+				'statusOpen' => __( 'Open', 'pencilino' ),
+				'statusResolved' => __( 'Resolved', 'pencilino' ),
+				'editedLabel' => __( 'edited', 'pencilino' ),
+				'deleteLabel' => __( 'Delete', 'pencilino' ),
+				'deleteSure' => __( 'Click again to delete', 'pencilino' ),
+				'commentDeleted' => __( 'Comment deleted', 'pencilino' ),
+					'writeComment' => __( 'Write a comment first.', 'pencilino' ),
+					'saveChanges' => __( 'Save', 'pencilino' ),
+					'section' => __( 'Page section', 'pencilino' ),
+					'locationMissing' => __( 'The original element has changed. This comment is still saved with its page context.', 'pencilino' ),
+					'selectText'  => __( 'Select the text you want to turn into a link first.', 'pencilino' ),
+					'editContent' => __( 'Edit content', 'pencilino' ),
+					'closeEditor' => __( 'Close', 'pencilino' ),
+					'save' => __( 'Save', 'pencilino' ),
+				'editAdmin' => __( 'Edit in the editor', 'pencilino' ),
+				'editManaged' => Pencil_Modal::enabled() ? __( 'Edit this content', 'pencilino' ) : __( 'Editable in the editor', 'pencilino' ),
+					'loadingEditor' => __( 'Loading editor...', 'pencilino' ),
+					'updating' => __( 'Updating...', 'pencilino' ),
+					'discardChanges' => __( 'You have unsaved changes. Close without saving?', 'pencilino' ),
+			'openAdmin' => __( 'Open in dashboard', 'pencilino' ),
 				),
 			)
 		);
@@ -183,34 +240,23 @@ final class Pencil_Plugin {
 	 * @return void
 	 */
 	public static function render_editor() {
+		if ( self::in_iframe() ) {
+			return;
+		}
 		if ( ! self::can_edit() ) {
 			return;
 		}
 		?>
 		<div class="pencil-ui pencil-toolbar" data-pencil-toolbar hidden>
 			<button class="pencil-toolbar__select" type="button" data-pencil-toggle aria-pressed="false">
-				<span data-pencil-toggle-label><?php esc_html_e( 'Open Pencilino', 'pencilino-by-rino' ); ?></span>
+				<span data-pencil-toggle-label><?php esc_html_e( 'Edit', 'pencilino' ); ?></span>
 				<span class="dashicons dashicons-edit" aria-hidden="true"></span>
 			</button>
 		</div>
-		<?php if ( Pencil_Client::clean_admin() ) : ?>
-			<a class="pencil-ui pencil-client-logout" href="<?php echo esc_url( wp_logout_url( Pencil_Client::logged_out_url() ) ); ?>"><?php esc_html_e( 'Log out', 'pencilino-by-rino' ); ?></a>
-		<?php endif; ?>
 
 		<div class="pencil-ui pencil-status" data-pencil-status role="status" aria-live="polite" hidden></div>
 
-		<div class="pencil-ui pencil-highlight" data-pencil-highlight hidden>
-			<div class="pencil-highlight__label">
-				<span class="pencil-highlight__text" data-pencil-highlight-label></span>
-				<a
-					class="pencil-highlight__action"
-					data-pencil-managed-edit
-					href="#"
-
-					hidden
-				></a>
-			</div>
-		</div>
+		<div class="pencil-ui pencil-highlight" data-pencil-highlight hidden></div>
 
 		<div
 			class="pencil-ui pencil-popup"
@@ -221,31 +267,42 @@ final class Pencil_Plugin {
 		>
 			<form data-pencil-form>
 				<div class="pencil-popup__label" id="pencil-popup-title" data-pencil-popup-label></div>
-				<div class="pencil-popup__switch" role="tablist" aria-label="<?php esc_attr_e( 'Selected element action', 'pencilino-by-rino' ); ?>">
-					<button type="button" role="tab" aria-selected="true" data-pencil-mode="edit"><?php esc_html_e( 'Edit content', 'pencilino-by-rino' ); ?></button>
-					<button type="button" role="tab" aria-selected="false" data-pencil-mode="comment"><?php esc_html_e( 'Leave a comment', 'pencilino-by-rino' ); ?></button>
+				<div class="pencil-popup__header">
+					<div class="pencil-popup__switch" role="tablist" aria-label="<?php esc_attr_e( 'Selected element action', 'pencilino' ); ?>">
+						<button type="button" role="tab" aria-selected="true" data-pencil-mode="edit"><span class="dashicons dashicons-edit" aria-hidden="true"></span><?php esc_html_e( 'Edit', 'pencilino' ); ?></button>
+						<button type="button" role="tab" aria-selected="false" data-pencil-mode="comment"><span class="dashicons dashicons-admin-comments" aria-hidden="true"></span><?php esc_html_e( 'Comment', 'pencilino' ); ?></button>
+					</div>
+					<button class="pencil-popup__close" type="button" data-pencil-cancel aria-label="<?php esc_attr_e( 'Close', 'pencilino' ); ?>"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>
 				</div>
 				<div class="pencil-popup__comment" data-pencil-comment-editor hidden>
-					<label class="pencil-popup__field"><span class="pencil-popup__field-label"><?php esc_html_e( 'Comment', 'pencilino-by-rino' ); ?></span><textarea class="pencil-popup__input" rows="4" maxlength="5000" data-pencil-comment-input></textarea></label>
-					<p class="pencil-popup__hint"><?php esc_html_e( 'Private feedback for your site team. This does not change the page.', 'pencilino-by-rino' ); ?></p>
+					<textarea class="pencil-popup__input" rows="4" maxlength="5000" placeholder="<?php esc_attr_e( 'Write a comment', 'pencilino' ); ?>" aria-label="<?php esc_attr_e( 'Comment', 'pencilino' ); ?>" data-pencil-comment-input></textarea>
+					<p class="pencil-popup__hint"><?php esc_html_e( 'Private feedback for your site team. This does not change the page.', 'pencilino' ); ?></p>
 				</div>
 				<div class="pencil-popup__managed" data-pencil-managed-editor hidden>
-					<p class="pencil-popup__hint" data-pencil-managed-description></p>
-					<a class="pencil-popup__button pencil-popup__button--primary" data-pencil-popup-managed-link href="#"><?php esc_html_e( 'Open editor', 'pencilino-by-rino' ); ?></a>
+					<p class="pencil-popup__hint pencil-popup__noaccess" data-pencil-popup-noaccess role="status" hidden><?php esc_html_e( 'You do not have access to edit this. It is managed by another plugin. Ask an administrator if you need to change it.', 'pencilino' ); ?></p>
+					<a class="pencil-popup__managed-field" data-pencil-popup-managed-link href="#"><span data-pencil-popup-managed-text><?php esc_html_e( 'Edit this content', 'pencilino' ); ?></span><span class="dashicons dashicons-edit" aria-hidden="true"></span></a>
 				</div>
-				<div class="pencil-popup__comment" data-pencil-comment-detail hidden><p data-pencil-comment-author class="pencil-popup__hint"></p><p data-pencil-comment-body class="pencil-popup__note"></p></div>
+				<div class="pencil-popup__comment pencil-popup__detail" data-pencil-comment-detail hidden>
+					<div class="pencil-popup__who"><span class="pencil-popup__avatar" data-pencil-comment-avatar aria-hidden="true"></span><span><strong data-pencil-comment-author></strong><small data-pencil-comment-meta></small></span></div>
+					<p data-pencil-comment-body class="pencil-popup__note"></p>
+					<div class="pencil-popup__edit" data-pencil-comment-edit-form hidden>
+						<textarea class="pencil-popup__input" rows="4" maxlength="5000" aria-label="<?php esc_attr_e( 'Edit your comment', 'pencilino' ); ?>" data-pencil-comment-edit-input></textarea>
+						<div class="pencil-popup__edit-actions"><button type="button" class="pencil-popup__button pencil-popup__button--quiet" data-pencil-comment-delete><?php esc_html_e( 'Delete', 'pencilino' ); ?></button><button type="button" class="pencil-popup__button pencil-popup__button--primary" data-pencil-comment-edit-save><?php esc_html_e( 'Save', 'pencilino' ); ?></button></div>
+					</div>
+					<button type="button" class="pencil-popup__link" data-pencil-comment-edit hidden><?php esc_html_e( 'Edit', 'pencilino' ); ?></button>
+				</div>
 				<div data-pencil-text-editor>
 					<textarea class="pencil-popup__input" id="pencil-popup-value" name="value" rows="1" wrap="soft" autocomplete="off" aria-labelledby="pencil-popup-title" data-pencil-input></textarea>
 				</div>
 				<div class="pencil-popup__richtext-editor" data-pencil-richtext-editor hidden>
-					<div class="pencil-popup__toolbar" role="toolbar" aria-label="<?php esc_attr_e( 'Formatting', 'pencilino-by-rino' ); ?>">
+					<div class="pencil-popup__toolbar" role="toolbar" aria-label="<?php esc_attr_e( 'Formatting', 'pencilino' ); ?>">
 						<?php
 						$tools = array(
-							'bold'                => array( 'editor-bold', __( 'Bold', 'pencilino-by-rino' ) ),
-							'italic'              => array( 'editor-italic', __( 'Italic', 'pencilino-by-rino' ) ),
-							'link'                => array( 'admin-links', __( 'Link', 'pencilino-by-rino' ) ),
-							'insertUnorderedList' => array( 'editor-ul', __( 'Bulleted list', 'pencilino-by-rino' ) ),
-							'insertOrderedList'   => array( 'editor-ol', __( 'Numbered list', 'pencilino-by-rino' ) ),
+							'bold'                => array( 'editor-bold', __( 'Bold', 'pencilino' ) ),
+							'italic'              => array( 'editor-italic', __( 'Italic', 'pencilino' ) ),
+							'link'                => array( 'admin-links', __( 'Link', 'pencilino' ) ),
+							'insertUnorderedList' => array( 'editor-ul', __( 'Bulleted list', 'pencilino' ) ),
+							'insertOrderedList'   => array( 'editor-ol', __( 'Numbered list', 'pencilino' ) ),
 						);
 
 						foreach ( $tools as $command => $tool ) :
@@ -257,20 +314,20 @@ final class Pencil_Plugin {
 					</div>
 					<div class="pencil-popup__richtext" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="pencil-popup-title" data-pencil-richtext-input></div>
 					<div class="pencil-popup__link" data-pencil-link-row hidden>
-						<input class="pencil-popup__input" type="text" autocomplete="off" inputmode="url" placeholder="<?php esc_attr_e( 'https://example.com or /contact', 'pencilino-by-rino' ); ?>" aria-label="<?php esc_attr_e( 'Link address', 'pencilino-by-rino' ); ?>" data-pencil-link-input>
+						<input class="pencil-popup__input" type="text" autocomplete="off" inputmode="url" placeholder="<?php esc_attr_e( 'https://example.com or /contact', 'pencilino' ); ?>" aria-label="<?php esc_attr_e( 'Link address', 'pencilino' ); ?>" data-pencil-link-input>
 						<button class="pencil-popup__button pencil-popup__button--quiet" type="button" data-pencil-link-apply>
-							<?php esc_html_e( 'Apply', 'pencilino-by-rino' ); ?>
+							<?php esc_html_e( 'Apply', 'pencilino' ); ?>
 						</button>
 					</div>
 				</div>
 				<div class="pencil-popup__button-editor" data-pencil-button-editor hidden>
 					<label class="pencil-popup__field">
-						<span class="pencil-popup__field-label"><?php esc_html_e( 'Text', 'pencilino-by-rino' ); ?></span>
+						<span class="pencil-popup__field-label"><?php esc_html_e( 'Text', 'pencilino' ); ?></span>
 						<input class="pencil-popup__input" type="text" autocomplete="off" data-pencil-button-text>
 					</label>
 					<label class="pencil-popup__field">
-						<span class="pencil-popup__field-label"><?php esc_html_e( 'Link', 'pencilino-by-rino' ); ?></span>
-						<input class="pencil-popup__input" type="text" autocomplete="off" inputmode="url" placeholder="<?php esc_attr_e( 'https://example.com or /contact', 'pencilino-by-rino' ); ?>" data-pencil-button-url>
+						<span class="pencil-popup__field-label"><?php esc_html_e( 'Link', 'pencilino' ); ?></span>
+						<input class="pencil-popup__input" type="text" autocomplete="off" inputmode="url" placeholder="<?php esc_attr_e( 'https://example.com or /contact', 'pencilino' ); ?>" data-pencil-button-url>
 					</label>
 				</div>
 				<div class="pencil-popup__image-editor" data-pencil-image-editor hidden>
@@ -278,16 +335,13 @@ final class Pencil_Plugin {
 						<img src="" alt="" data-pencil-image-preview>
 					</div>
 					<button class="pencil-popup__replace" type="button" data-pencil-replace-image>
-						<?php esc_html_e( 'Replace image', 'pencilino-by-rino' ); ?>
+						<?php esc_html_e( 'Replace image', 'pencilino' ); ?>
 					</button>
 				</div>
 				<p class="pencil-popup__error" data-pencil-error hidden></p>
 				<div class="pencil-popup__actions">
-					<button class="pencil-popup__button pencil-popup__button--quiet" type="button" data-pencil-cancel>
-						<?php esc_html_e( 'Close', 'pencilino-by-rino' ); ?>
-					</button>
 					<button class="pencil-popup__button pencil-popup__button--primary" type="submit" data-pencil-save>
-						<?php esc_html_e( 'Save changes', 'pencilino-by-rino' ); ?>
+						<?php esc_html_e( 'Save', 'pencilino' ); ?>
 					</button>
 				</div>
 			</form>
@@ -301,7 +355,7 @@ final class Pencil_Plugin {
 	 * @param string $relative_path Plugin-relative path.
 	 * @return string
 	 */
-	private static function asset_version( $relative_path ) {
+	public static function asset_version( $relative_path ) {
 		$path = PENCIL_PLUGIN_PATH . $relative_path;
 
 		return file_exists( $path ) ? (string) filemtime( $path ) : PENCIL_VERSION;

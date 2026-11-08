@@ -75,7 +75,7 @@ final class Pencil_Activity {
 		);
 
 		if ( $table_name === $table_exists ) {
-			update_option( 'pencil_activity_db_version', self::DB_VERSION, false );
+			update_option( 'pencil_activity_db_version', self::DB_VERSION, true );
 		}
 	}
 

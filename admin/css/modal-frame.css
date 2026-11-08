@@ -1,0 +1,23 @@
+/* Pencilino edit popup: show the WordPress edit screen without the admin around it. */
+html.wp-toolbar { padding-top: 0 !important; }
+body.pencil-modal-frame #wpadminbar,
+body.pencil-modal-frame #adminmenumain,
+body.pencil-modal-frame #wpfooter,
+body.pencil-modal-frame #screen-meta-links,
+body.pencil-modal-frame .woocommerce-layout__header { display: none !important; }
+body.pencil-modal-frame #wpcontent,
+body.pencil-modal-frame #wpfooter { margin-left: 0 !important; }
+body.pencil-modal-frame.pencil-client-admin { --pencil-header-height: 0px; }
+body.pencil-modal-frame .interface-interface-skeleton { top: 0 !important; left: 0 !important; height: 100% !important; }
+body.pencil-modal-frame .edit-post-header__back-button,
+body.pencil-modal-frame .editor-header__back-button,
+body.pencil-modal-frame .edit-post-fullscreen-mode-close { display: none !important; }
+/* Narrow frames hit the mobile layout, which leaves room for an admin bar we hide. */
+body.pencil-modal-frame #wpbody { padding-top: 0 !important; }
+body.pencil-modal-frame #local-storage-notice { display: none !important; }
+
+/* The field the visitor clicked. The rest of the screen stays visible. The outline pulses twice, stays for a while, then fades out. */
+body.pencil-modal-frame .pencil-highlight { outline: 2px solid #6c47ff; outline-offset: 4px; border-radius: 4px; animation: pencil-highlight-pulse 1.6s ease-out 2, pencil-highlight-fade 1s ease-in 10s forwards; }
+@keyframes pencil-highlight-pulse { from { box-shadow: 0 0 0 0 rgba(108, 71, 255, 0.35); } to { box-shadow: 0 0 0 14px rgba(108, 71, 255, 0); } }
+@keyframes pencil-highlight-fade { to { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { body.pencil-modal-frame .pencil-highlight { animation: pencil-highlight-fade 1s ease-in 10s forwards; } }

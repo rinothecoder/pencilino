@@ -1,0 +1,271 @@
+/**
+ * Pencilino Dev mode: the Spacing tab and the bands on the page.
+ */
+
+.pencil-dev-sp-tabs {
+	display: flex;
+	gap: 20px;
+	padding: 0 16px;
+	border-bottom: 1px solid var(--pencil-border);
+}
+
+.pencil-dev-sp-tabs button {
+	appearance: none;
+	margin: 0 0 -1px;
+	padding: 8px 0 9px;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: none;
+	color: var(--pencil-muted);
+	cursor: pointer;
+	font: 600 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.pencil-dev-sp-tabs button.is-on {
+	border-bottom-color: var(--pencil-accent);
+	color: var(--pencil-ink);
+}
+
+.pencil-dev-sp-seg {
+	display: flex;
+	margin-top: 10px;
+	padding: 3px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 999px;
+	background: var(--pencil-subtle);
+}
+
+.pencil-dev-sp-seg button {
+	appearance: none;
+	flex: 1;
+	margin: 0;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: 999px;
+	background: none;
+	color: var(--pencil-muted);
+	cursor: pointer;
+	font: 600 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.pencil-dev-sp-seg button.is-on {
+	background: var(--pencil-panel);
+	box-shadow: 0 1px 3px rgba(33, 26, 52, 0.14);
+	color: var(--pencil-ink);
+}
+
+.pencil-dev-sp-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	margin-bottom: 8px;
+}
+
+.pencil-dev-sp-pair {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+.pencil-dev-sp-cross {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	gap: 8px;
+}
+
+.pencil-dev-sp-cross .is-top {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.pencil-dev-sp-cross .is-left {
+	grid-column: 1;
+	grid-row: 2;
+}
+
+.pencil-dev-sp-cross .is-right {
+	grid-column: 3;
+	grid-row: 2;
+}
+
+.pencil-dev-sp-cross .is-bottom {
+	grid-column: 2;
+	grid-row: 3;
+}
+
+.pencil-dev-sp-field {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	height: 32px;
+	padding: 0 8px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 8px;
+	background: var(--pencil-panel);
+	color: var(--pencil-ink);
+	cursor: pointer;
+}
+
+.pencil-dev-sp-field:focus-within {
+	border-color: var(--pencil-accent);
+	box-shadow: 0 0 0 3px var(--pencil-focus);
+}
+
+.pencil-dev-sp-field.is-changed {
+	border-color: var(--pencil-accent);
+}
+
+.pencil-dev-sp-field.is-changed::after {
+	content: '';
+	position: absolute;
+	top: 5px;
+	right: 5px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--pencil-accent);
+}
+
+.pencil-dev-sp-icon {
+	flex: none;
+	width: 14px;
+	height: 14px;
+}
+
+.pencil-dev-sp-icon .frame {
+	fill: none;
+	stroke: var(--pencil-muted);
+	stroke-width: 1;
+	stroke-dasharray: 2 1.5;
+}
+
+.pencil-dev-sp-icon .edge {
+	stroke: var(--pencil-accent);
+	stroke-width: 2.4;
+	stroke-linecap: round;
+}
+
+.pencil-dev-panel .pencil-dev-sp-field select {
+	appearance: none;
+	background-color: transparent;
+	border-radius: 0;
+	height: 100%;
+	width: auto;
+	line-height: 1.2;
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	margin: 0;
+	padding: 0 12px 0 0;
+	border: 0;
+	background: none url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23534b6a' stroke-width='2'/%3E%3C/svg%3E") no-repeat right center / 9px 9px;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+	font: 13px ui-monospace, Menlo, Consolas, monospace;
+	text-align: right;
+	text-align-last: right;
+}
+
+.pencil-dev-panel .pencil-dev-sp-field select:focus {
+	outline: 0;
+}
+
+.pencil-dev-sp-was {
+	margin: 6px 0 0;
+	color: var(--pencil-muted);
+	font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+}
+
+.pencil-dev-sp-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.pencil-dev-sp-count {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--pencil-ink);
+	font-size: 13px;
+}
+
+.pencil-dev-sp-chip {
+	padding: 2px 9px;
+	border-radius: 999px;
+	background: rgba(124, 58, 237, 0.1);
+	color: var(--pencil-accent);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.pencil-dev-sp-chip.is-error {
+	background: rgba(185, 28, 28, 0.1);
+	color: #b91c1c;
+}
+
+.pencil-dev-sp-total {
+	margin: 10px 0 0;
+	color: var(--pencil-muted);
+	font-size: 13px;
+}
+
+.pencil-dev-sp-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 2147482997;
+	pointer-events: none;
+}
+
+.pencil-dev-sp-overlay[hidden] {
+	display: none;
+}
+
+.pencil-dev-sp-band {
+	position: fixed;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	box-sizing: border-box;
+	color: var(--pencil-accent);
+	font: 600 12px/1 ui-monospace, Menlo, Consolas, monospace;
+}
+
+.pencil-dev-sp-band[hidden] {
+	display: none;
+}
+
+.pencil-dev-sp-band--padding {
+	background: rgba(124, 58, 237, 0.28);
+}
+
+.pencil-dev-sp-band--margin {
+	border: 1px dashed var(--pencil-accent);
+	background: repeating-linear-gradient(135deg, rgba(124, 58, 237, 0.22) 0 3px, rgba(124, 58, 237, 0.06) 3px 8px);
+}
+
+.pencil-dev-sp-hint {
+	display: grid;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: var(--pencil-subtle);
+}
+
+.pencil-dev-sp-hintrow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	color: var(--pencil-ink);
+	font: 400 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.pencil-dev-sp-hintrow .pencil-dev-pill {
+	flex: none;
+}

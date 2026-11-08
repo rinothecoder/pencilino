@@ -1,21 +1,16 @@
-/* Keep the native editors and their fields; replace only the surrounding shell. */
+/* Clients: the normal admin, a little quieter. Toolbar items are set in Pencil_Client::focus_toolbar(). */
 .pencil-client-admin {
  --pencil-accent:#7c3aed;--pencil-accent-hover:#6d28d9;--pencil-border:#e3e0ed;--pencil-ink:#211a34;--pencil-muted:#645d73;--pencil-panel:#fff;--pencil-subtle:#f6f6f7;
- --pencil-header-height:80px;--pencil-gap:16px;--pencil-radius:8px;
+ --pencil-gap:16px;--pencil-radius:8px;
 }
-html:has(body.pencil-client-admin){margin-top:0!important}
-.pencil-client-admin #adminmenumain,.pencil-client-admin #wpadminbar,.pencil-client-admin #wpfooter{display:none!important}
-.pencil-client-admin #wpcontent,.pencil-client-admin #wpfooter{margin-left:0!important}
-.pencil-client-admin #wpcontent{padding-top:var(--pencil-header-height)}
-.pencil-client-admin .pencil-client-header{position:fixed;inset:0 0 auto;z-index:1000000;min-height:var(--pencil-header-height);display:flex;align-items:center;justify-content:space-between;gap:var(--pencil-gap);padding:16px 28px;box-sizing:border-box;border-bottom:1px solid var(--pencil-border);background:var(--pencil-panel);color:var(--pencil-ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.pencil-client-brand,.pencil-client-header nav{display:flex;align-items:center;gap:12px}
-.pencil-client-brand img{width:32px;height:32px}.pencil-client-brand strong{font-size:18px}.pencil-client-brand span{font-size:12px;color:var(--pencil-muted);background:var(--pencil-subtle);border-radius:999px;padding:4px 10px}
+.pencil-client-admin #wpfooter{display:none!important}
 .pencil-client-button{display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border:1px solid var(--pencil-border);border-radius:var(--pencil-radius);background:var(--pencil-panel);color:var(--pencil-ink);font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
 .pencil-client-button:hover{background:var(--pencil-subtle);color:var(--pencil-ink)}.pencil-client-button:focus-visible{outline:3px solid var(--pencil-accent);outline-offset:3px}
-.pencil-client-admin .interface-interface-skeleton{top:var(--pencil-header-height)!important;height:calc(100% - var(--pencil-header-height))!important}
 .pencil-client-admin .edit-post-header__back-button,.pencil-client-admin .editor-header__back-button,.pencil-client-admin .edit-post-fullscreen-mode-close,.pencil-client-admin .editor-post-publish-panel__header .editor-post-publish-panel__header-publish-button .components-button[href*="edit.php"]{display:none!important}
 .pencil-client-dialog-backdrop{position:fixed;inset:0;z-index:1000001;display:grid;place-items:center;background:#211a3466;padding:16px}
 .pencil-client-dialog{width:min(420px,100%);box-sizing:border-box;background:var(--pencil-panel);color:var(--pencil-ink);padding:28px;border-radius:14px;box-shadow:0 16px 48px #211a3433;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .pencil-client-dialog h2{margin:0 0 12px;font-size:22px;line-height:1.3}.pencil-client-dialog p{margin:0 0 24px;line-height:1.6}.pencil-client-dialog-actions{display:flex;flex-wrap:wrap;gap:12px}.pencil-client-button--primary{background:var(--pencil-accent);border-color:var(--pencil-accent);color:var(--pencil-panel)}.pencil-client-button--primary:hover{background:var(--pencil-accent-hover);color:var(--pencil-panel)}
-@media(max-width:600px){.pencil-client-admin{--pencil-header-height:116px}.pencil-client-admin .pencil-client-header{align-items:flex-start;flex-direction:column;padding:12px 16px;gap:12px}.pencil-client-header nav{flex-wrap:wrap}.pencil-client-admin #wpcontent{padding-left:10px}}
 .pencil-client-admin .woocommerce-layout__header,.pencil-client-admin .woocommerce-layout__activity-panel-wrapper,.pencil-client-admin #screen-meta-links,.pencil-client-admin #screen-meta{display:none!important}
+/* Client toolbar: Dashboard or Back to website on the left, Log out on the right, also on phones. */
+#wpadminbar #wp-admin-bar-pencil-switch > .ab-item,#wpadminbar #wp-admin-bar-pencil-logout > .ab-item{display:flex;align-items:center;gap:6px}
+@media screen and (max-width:782px){#wpadminbar #wp-admin-bar-pencil-switch,#wpadminbar #wp-admin-bar-pencil-logout{display:block}#wpadminbar #wp-admin-bar-pencil-switch > .ab-item,#wpadminbar #wp-admin-bar-pencil-logout > .ab-item{height:46px;padding:0 14px;font-size:14px;line-height:46px}}

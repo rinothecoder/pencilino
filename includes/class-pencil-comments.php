@@ -7,7 +7,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Pencil_Comments {
-	const DB_VERSION = '1';
+	const DB_VERSION = '2';
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'maybe_install' ), 5 );
@@ -44,6 +44,7 @@ final class Pencil_Comments {
 			created_at datetime NOT NULL,
 			resolved_at datetime DEFAULT NULL,
 			resolved_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			edited_at datetime DEFAULT NULL,
 			PRIMARY KEY  (comment_id),
 			KEY page_key (page_key),
 			KEY created_at (created_at),
@@ -51,7 +52,7 @@ final class Pencil_Comments {
 		) {$collate};" );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time schema verification.
 		if ( $table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) ) {
-			update_option( 'pencil_comments_db_version', self::DB_VERSION, false );
+			update_option( 'pencil_comments_db_version', self::DB_VERSION, true );
 		}
 	}
 
@@ -74,17 +75,82 @@ final class Pencil_Comments {
 			array( 'methods' => WP_REST_Server::READABLE, 'callback' => array( __CLASS__, 'read_one' ), 'permission_callback' => array( __CLASS__, 'can_comment' ) ),
 			array(
 			'methods' => WP_REST_Server::EDITABLE, 'callback' => array( __CLASS__, 'update_status' ),
-			'permission_callback' => static function () { return current_user_can( 'manage_options' ); },
+			'permission_callback' => static function () { return Pencil_Client::can_manage(); },
 			'args' => array( 'resolved' => array( 'required' => true, 'type' => 'boolean' ) ),
 			),
 		) );
+		register_rest_route( 'pencil/v1', '/comments/(?P<id>\d+)/own', array(
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( __CLASS__, 'delete_own' ),
+				'permission_callback' => array( __CLASS__, 'can_comment' ),
+			),
+		) );
+		register_rest_route( 'pencil/v1', '/comments/(?P<id>\d+)/text', array(
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => array( __CLASS__, 'edit_text' ),
+				'permission_callback' => array( __CLASS__, 'can_comment' ),
+				'args'                => array( 'comment' => array( 'required' => true, 'type' => 'string', 'maxLength' => 5000 ) ),
+			),
+		) );
+	}
+
+	/** Delete a comment. Only its author may. */
+	public static function delete_own( $request ) {
+		global $wpdb;
+		$id = absint( $request['id'] );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private comment lookup.
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE comment_id = %d', self::table_name(), $id ) );
+		if ( ! $row ) {
+			return new WP_Error( 'pencil_comment_missing', __( 'This comment could not be found.', 'pencilino' ), array( 'status' => 404 ) );
+		}
+		if ( (int) $row->user_id !== get_current_user_id() || 0 === get_current_user_id() ) {
+			return new WP_Error( 'pencil_comment_forbidden', __( 'You can only delete your own comments.', 'pencilino' ), array( 'status' => 403 ) );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Prepared delete of one private comment.
+		$result = $wpdb->delete( self::table_name(), array( 'comment_id' => $id ), array( '%d' ) );
+		if ( ! $result ) {
+			return new WP_Error( 'pencil_comment_delete', __( 'The comment could not be deleted. Please try again.', 'pencilino' ), array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'deleted' => true, 'id' => $id ) );
+	}
+
+	/** Change the text of a comment. Only its author may, and it is marked as edited. */
+	public static function edit_text( $request ) {
+		global $wpdb;
+		$id = absint( $request['id'] );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private comment lookup.
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE comment_id = %d', self::table_name(), $id ) );
+		if ( ! $row ) {
+			return new WP_Error( 'pencil_comment_missing', __( 'This comment could not be found.', 'pencilino' ), array( 'status' => 404 ) );
+		}
+		if ( (int) $row->user_id !== get_current_user_id() || 0 === get_current_user_id() ) {
+			return new WP_Error( 'pencil_comment_forbidden', __( 'You can only edit your own comments.', 'pencilino' ), array( 'status' => 403 ) );
+		}
+		$text = sanitize_textarea_field( $request['comment'] );
+		if ( '' === trim( $text ) || strlen( $text ) > 20000 ) {
+			return new WP_Error( 'pencil_comment_text', __( 'Write a comment of up to 5,000 characters.', 'pencilino' ), array( 'status' => 400 ) );
+		}
+		if ( $text === $row->comment_text ) {
+			return rest_ensure_response( self::serialise( $row ) );
+		}
+		$edited = current_time( 'mysql', true );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Prepared update of one private comment.
+		$result = $wpdb->update( self::table_name(), array( 'comment_text' => $text, 'edited_at' => $edited ), array( 'comment_id' => $id ), array( '%s', '%s' ), array( '%d' ) );
+		if ( false === $result ) {
+			return new WP_Error( 'pencil_comment_save', __( 'The comment could not be saved. Please try again.', 'pencilino' ), array( 'status' => 500 ) );
+		}
+		$row->comment_text = $text;
+		$row->edited_at    = $edited;
+		return rest_ensure_response( self::serialise( $row ) );
 	}
 
 	public static function read_one( $request ) {
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private comment permalink lookup.
 		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE comment_id = %d', self::table_name(), absint( $request['id'] ) ) );
-		return $row ? rest_ensure_response( self::serialise( $row ) ) : new WP_Error( 'pencil_comment_missing', __( 'This comment could not be found.', 'pencilino-by-rino' ), array( 'status' => 404 ) );
+		return $row ? rest_ensure_response( self::serialise( $row ) ) : new WP_Error( 'pencil_comment_missing', __( 'This comment could not be found.', 'pencilino' ), array( 'status' => 404 ) );
 	}
 
 	/** A canonical same-site page URL; never store editor tokens or arbitrary URLs. */
@@ -93,12 +159,12 @@ final class Pencil_Comments {
 		$parts = wp_parse_url( $url );
 		$home = wp_parse_url( home_url( '/' ) );
 		if ( ! $parts || empty( $parts['host'] ) || strtolower( $parts['host'] ) !== strtolower( $home['host'] ) || ! empty( $parts['user'] ) || ! empty( $parts['pass'] ) || ! in_array( $parts['scheme'] ?? '', array( 'http', 'https' ), true ) || ( $parts['port'] ?? null ) !== ( $home['port'] ?? null ) ) {
-			return new WP_Error( 'pencil_comment_page', __( 'Choose a page on this website.', 'pencilino-by-rino' ), array( 'status' => 400 ) );
+			return new WP_Error( 'pencil_comment_page', __( 'Choose a page on this website.', 'pencilino' ), array( 'status' => 400 ) );
 		}
 		$path = $parts['path'] ?? '/';
 		$home_path = trailingslashit( $home['path'] ?? '/' );
 		if ( 0 !== strpos( trailingslashit( $path ), $home_path ) || preg_match( '~/(?:wp-admin|wp-login\.php|wp-json)(?:/|$)~', $path ) ) {
-			return new WP_Error( 'pencil_comment_page', __( 'Comments belong on the frontend website.', 'pencilino-by-rino' ), array( 'status' => 400 ) );
+			return new WP_Error( 'pencil_comment_page', __( 'Comments belong on the frontend website.', 'pencilino' ), array( 'status' => 400 ) );
 		}
 		$canonical = $home['scheme'] . '://' . $home['host'] . ( isset( $home['port'] ) ? ':' . $home['port'] : '' ) . $path;
 		$query = array();
@@ -131,7 +197,7 @@ final class Pencil_Comments {
 		}
 		$text = sanitize_textarea_field( $request['comment'] );
 		if ( '' === trim( $text ) || strlen( $text ) > 20000 ) {
-			return new WP_Error( 'pencil_comment_text', __( 'Write a comment of up to 5,000 characters.', 'pencilino-by-rino' ), array( 'status' => 400 ) );
+			return new WP_Error( 'pencil_comment_text', __( 'Write a comment of up to 5,000 characters.', 'pencilino' ), array( 'status' => 400 ) );
 		}
 		$target = (array) $request['target'];
 		$clean = array();
@@ -140,7 +206,7 @@ final class Pencil_Comments {
 			$clean[ $key ] = function_exists( 'mb_substr' ) ? mb_substr( $value, 0, $max ) : substr( $value, 0, $max );
 		}
 		if ( empty( $clean['selector'] ) && empty( $clean['field'] ) && empty( $clean['id'] ) ) {
-			return new WP_Error( 'pencil_comment_target', __( 'Select an element to attach your comment.', 'pencilino-by-rino' ), array( 'status' => 400 ) );
+			return new WP_Error( 'pencil_comment_target', __( 'Select an element to attach your comment.', 'pencilino' ), array( 'status' => 400 ) );
 		}
 		foreach ( array( 'x', 'y' ) as $key ) {
 			$clean[ $key ] = isset( $target[ $key ] ) && is_numeric( $target[ $key ] ) ? min( 1, max( 0, (float) $target[ $key ] ) ) : 0.5;
@@ -150,7 +216,7 @@ final class Pencil_Comments {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- $wpdb->insert prepares all values.
 		$result = $wpdb->insert( self::table_name(), $values, array( '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%s', '%s' ) );
 		if ( false === $result ) {
-			return new WP_Error( 'pencil_comment_save', __( 'The comment could not be saved. Please try again.', 'pencilino-by-rino' ), array( 'status' => 500 ) );
+			return new WP_Error( 'pencil_comment_save', __( 'The comment could not be saved. Please try again.', 'pencilino' ), array( 'status' => 500 ) );
 		}
 		$values['comment_id'] = $wpdb->insert_id;
 		$values['resolved_at'] = null;
@@ -158,7 +224,7 @@ final class Pencil_Comments {
 	}
 
 	public static function serialise( $row ) {
-		return array( 'id' => (int) $row->comment_id, 'page_url' => $row->page_url, 'page_title' => $row->page_title, 'target' => json_decode( $row->target, true ), 'comment' => $row->comment_text, 'author' => $row->user_name, 'created_at' => $row->created_at, 'resolved' => ! empty( $row->resolved_at ) );
+		return array( 'id' => (int) $row->comment_id, 'page_url' => $row->page_url, 'page_title' => $row->page_title, 'target' => json_decode( $row->target, true ), 'comment' => $row->comment_text, 'author' => $row->user_name, 'created_at' => $row->created_at, 'edited_at' => ! empty( $row->edited_at ) ? $row->edited_at : null, 'mine' => get_current_user_id() > 0 && (int) $row->user_id === get_current_user_id(), 'resolved' => ! empty( $row->resolved_at ) );
 	}
 
 	public static function set_resolved( $id, $resolved ) {
@@ -166,11 +232,11 @@ final class Pencil_Comments {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private custom-table lookup.
 		$exists = $wpdb->get_var( $wpdb->prepare( 'SELECT comment_id FROM %i WHERE comment_id = %d', self::table_name(), $id ) );
 		if ( ! $exists ) {
-			return new WP_Error( 'pencil_comment_missing', __( 'This comment could not be found.', 'pencilino-by-rino' ), array( 'status' => 404 ) );
+			return new WP_Error( 'pencil_comment_missing', __( 'This comment could not be found.', 'pencilino' ), array( 'status' => 404 ) );
 		}
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Prepared update; inbox reads fresh rows on each request.
 		$result = $wpdb->update( self::table_name(), array( 'resolved_at' => $resolved ? current_time( 'mysql', true ) : null, 'resolved_by' => $resolved ? get_current_user_id() : 0 ), array( 'comment_id' => absint( $id ) ), array( '%s', '%d' ), array( '%d' ) );
-		return false === $result ? new WP_Error( 'pencil_comment_update', __( 'The comment status could not be saved.', 'pencilino-by-rino' ), array( 'status' => 500 ) ) : true;
+		return false === $result ? new WP_Error( 'pencil_comment_update', __( 'The comment status could not be saved.', 'pencilino' ), array( 'status' => 500 ) ) : true;
 	}
 
 	public static function update_status( $request ) {
@@ -179,8 +245,8 @@ final class Pencil_Comments {
 	}
 
 	public static function admin_resolve() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You cannot resolve comments.', 'pencilino-by-rino' ), '', array( 'response' => 403 ) );
+		if ( ! Pencil_Client::can_manage() ) {
+			wp_die( esc_html__( 'You cannot resolve comments.', 'pencilino' ), '', array( 'response' => 403 ) );
 		}
 		$id = isset( $_POST['comment_id'] ) ? absint( $_POST['comment_id'] ) : 0;
 		check_admin_referer( 'pencil_resolve_comment_' . $id );

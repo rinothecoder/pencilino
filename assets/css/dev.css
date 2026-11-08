@@ -1,0 +1,605 @@
+/**
+ * Pencilino Dev mode: the button in the toolbar, the hover box and the inspector panel.
+ */
+
+.pencil-toolbar__dev {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-height: 40px;
+	margin: 0;
+	padding: 0 16px 0 14px;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--pencil-ink);
+	cursor: pointer;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.pencil-toolbar__dev .dashicons {
+	width: 16px;
+	height: 16px;
+	color: var(--pencil-accent);
+	font-size: 16px;
+}
+
+.pencil-toolbar__dev:hover,
+.pencil-toolbar__dev:focus-visible {
+	background: transparent;
+	outline: none;
+}
+
+/* The active button turns purple. The rest of the toolbar keeps its normal look in both modes. */
+html.pencil-selection-active .pencil-toolbar,
+html.pencil-dev-active .pencil-toolbar {
+	border-color: rgba(83, 75, 106, 0.18);
+	background: rgba(253, 252, 254, 0.62);
+	box-shadow: 0 16px 38px rgba(33, 26, 52, 0.18), 0 2px 8px rgba(33, 26, 52, 0.08);
+}
+
+html.pencil-selection-active .pencil-toolbar:hover,
+html.pencil-dev-active .pencil-toolbar:hover {
+	background: rgba(253, 252, 254, 0.82);
+}
+
+html.pencil-dev-active .pencil-toolbar__dev,
+html.pencil-dev-active .pencil-toolbar__dev:hover {
+	background: rgba(124, 58, 237, 0.88);
+	color: #fff;
+}
+
+html.pencil-dev-active .pencil-toolbar__dev .dashicons {
+	color: currentcolor;
+}
+
+.pencil-dev-box {
+	position: fixed;
+	z-index: 2147482996;
+	border: 1px dashed var(--pencil-accent);
+	background: rgba(124, 58, 237, 0.1);
+	pointer-events: none;
+}
+
+.pencil-dev-box--pinned {
+	z-index: 2147482997;
+	border: 2px solid var(--pencil-accent);
+	background: rgba(124, 58, 237, 0.16);
+}
+
+.pencil-dev-tag {
+	position: fixed;
+	z-index: 2147482998;
+	max-width: 80vw;
+	padding: 4px 8px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 6px;
+	background: var(--pencil-panel);
+	box-shadow: 0 4px 14px rgba(33, 26, 52, 0.18);
+	color: var(--pencil-ink);
+	font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.pencil-dev-panel {
+	position: fixed;
+	z-index: 2147482999;
+	top: 48px;
+	right: 16px;
+	width: 340px;
+	max-width: calc(100vw - 32px);
+	max-height: calc(100vh - 120px);
+	overflow: auto;
+	border: 1px solid var(--pencil-border);
+	border-radius: 12px;
+	background: var(--pencil-panel);
+	box-shadow: 0 16px 38px rgba(33, 26, 52, 0.22), 0 2px 8px rgba(33, 26, 52, 0.08);
+	color: var(--pencil-body);
+}
+
+.pencil-dev-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--pencil-border);
+}
+
+.pencil-dev-title {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--pencil-ink);
+	font: 700 18px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pencil-dev-tools {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pencil-dev-link,
+.pencil-dev-close {
+	appearance: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--pencil-accent);
+	cursor: pointer;
+	font: inherit;
+	font-size: 12px;
+}
+
+.pencil-dev-close {
+	color: var(--pencil-muted);
+	font-size: 20px;
+	line-height: 1;
+}
+
+.pencil-dev-link:hover,
+.pencil-dev-close:hover {
+	color: var(--pencil-accent-hover);
+}
+
+.pencil-dev-section {
+	padding: 16px;
+	border-bottom: 1px solid var(--pencil-border);
+}
+
+.pencil-dev-section:last-child {
+	border-bottom: 0;
+}
+
+.pencil-dev-label {
+	margin: 0 0 12px;
+	color: var(--pencil-ink);
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.pencil-dev-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.pencil-dev-chip {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	padding: 6px 10px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 999px;
+	background: var(--pencil-subtle);
+	color: var(--pencil-ink);
+	cursor: pointer;
+	font: 12px/1.2 ui-monospace, Menlo, Consolas, monospace;
+	text-align: left;
+}
+
+.pencil-dev-chip:hover,
+.pencil-dev-chip:focus-visible {
+	border-color: var(--pencil-accent);
+	color: var(--pencil-accent);
+	outline: none;
+}
+
+.pencil-dev-chip .dashicons {
+	width: 14px;
+	height: 14px;
+	color: var(--pencil-muted);
+	font-size: 14px;
+}
+
+.pencil-dev-chip:hover .dashicons,
+.pencil-dev-chip:focus-visible .dashicons {
+	color: var(--pencil-accent);
+}
+
+.pencil-dev-chip--framework {
+	border-color: var(--pencil-accent);
+	background: var(--pencil-panel);
+	color: var(--pencil-accent);
+}
+
+.pencil-dev-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 14px;
+}
+
+.pencil-dev-label + .pencil-dev-row {
+	margin-top: 0;
+}
+
+.pencil-dev-key {
+	color: var(--pencil-muted);
+	font-size: 13px;
+}
+
+.pencil-dev-val {
+	color: var(--pencil-ink);
+	font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+	text-align: right;
+}
+
+.pencil-dev-note {
+	margin: 4px 0 0;
+	color: var(--pencil-muted);
+	font-size: 13px;
+}
+
+.pencil-dev-muted {
+	margin: 0;
+	color: var(--pencil-muted);
+	font-size: 13px;
+}
+
+.pencil-dev-result p {
+	margin: 0 0 6px;
+	font-size: 13px;
+}
+
+.pencil-dev-result .pencil-dev-row {
+	margin-top: 10px;
+}
+
+.pencil-dev-result .pencil-dev-label {
+	margin: 22px 0 12px;
+	font-size: 13px;
+}
+
+.pencil-dev-result .pencil-dev-note {
+	margin-top: 14px;
+}
+
+.pencil-dev-line {
+	margin: 12px 0 0;
+	color: var(--pencil-body);
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.pencil-dev-label + .pencil-dev-line {
+	margin-top: 0;
+}
+
+.pencil-dev-line--hard {
+	color: var(--pencil-ink);
+	font-weight: 400;
+}
+
+.pencil-dev-line--ok {
+	color: var(--pencil-muted);
+}
+
+.pencil-dev-result {
+	margin-top: 12px;
+}
+
+.pencil-dev-result .pencil-dev-line {
+	margin: 0 0 6px;
+}
+
+/* Class chips with a copy button and a switch button */
+.pencil-dev-classbox,
+.pencil-dev-chips--switch {
+	position: relative;
+}
+
+.pencil-dev-chip--split {
+	gap: 2px;
+	padding: 3px 4px 3px 10px;
+	cursor: default;
+}
+
+.pencil-dev-chip--split.is-changed {
+	border-color: var(--pencil-accent);
+	background: rgba(124, 58, 237, 0.1);
+}
+
+.pencil-dev-chip-name {
+	padding-right: 4px;
+}
+
+.pencil-dev-chip-tool {
+	appearance: none;
+	display: inline-grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: none;
+	color: var(--pencil-muted);
+	cursor: pointer;
+}
+
+.pencil-dev-chip-tool:hover,
+.pencil-dev-chip-tool:focus-visible,
+.pencil-dev-chip-tool[aria-expanded='true'] {
+	background: rgba(124, 58, 237, 0.1);
+	color: var(--pencil-accent);
+	outline: none;
+}
+
+.pencil-dev-chip-tool .dashicons {
+	width: 14px;
+	height: 14px;
+	color: inherit;
+	font-size: 14px;
+}
+
+.pencil-dev-menu {
+	position: absolute;
+	z-index: 5;
+	top: calc(100% + 6px);
+	left: 0;
+	min-width: 210px;
+	max-height: 270px;
+	overflow: auto;
+	padding: 6px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 10px;
+	background: var(--pencil-panel);
+	box-shadow: 0 10px 28px rgba(33, 26, 52, 0.2);
+}
+
+.pencil-dev-panel .pencil-dev-menu-search {
+	box-sizing: border-box;
+	width: 100%;
+	height: 30px;
+	margin: 0 0 6px;
+	padding: 0 8px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 8px;
+	background: var(--pencil-panel);
+	color: var(--pencil-ink);
+	font: 12px ui-monospace, Menlo, Consolas, monospace;
+}
+
+.pencil-dev-opt {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	width: 100%;
+	margin: 0;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	color: var(--pencil-ink);
+	cursor: pointer;
+	font: 12px ui-monospace, Menlo, Consolas, monospace;
+	text-align: left;
+}
+
+.pencil-dev-opt:hover,
+.pencil-dev-opt:focus-visible {
+	background: rgba(124, 58, 237, 0.1);
+	outline: none;
+}
+
+.pencil-dev-opt[aria-selected='true'] {
+	color: var(--pencil-accent);
+	font-weight: 700;
+}
+
+.pencil-dev-opt small {
+	color: var(--pencil-muted);
+	font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.pencil-dev-swapbar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-top: 12px;
+}
+
+.pencil-dev-swapnote b {
+	color: var(--pencil-ink);
+	font: 600 12px ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* The Result: rows with the variable as a tooltip */
+.pencil-dev-row--tip {
+	margin-top: 8px;
+}
+
+.pencil-dev-row--tip.is-copyable {
+	cursor: pointer;
+}
+
+.pencil-dev-row--tip.is-copyable:hover .pencil-dev-key {
+	color: var(--pencil-accent);
+}
+
+.pencil-dev-row--tip ~ .pencil-dev-note {
+	margin-top: 12px;
+}
+
+.pencil-dev-swatch {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	margin-right: 6px;
+	border: 1px solid var(--pencil-border);
+	border-radius: 50%;
+	vertical-align: -1px;
+}
+/* Class chip: click the name to copy, pencil to edit */
+.pencil-dev-chip--split .pencil-dev-chip-name {
+	appearance: none;
+	margin: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.pencil-dev-chip--split .pencil-dev-chip-name:hover,
+.pencil-dev-chip--split .pencil-dev-chip-name:focus-visible {
+	text-decoration: underline;
+	outline: none;
+}
+
+.pencil-dev-chip--split .pencil-dev-chip-name.is-copied {
+	color: var(--pencil-accent);
+}
+
+/* Class chips: all the same height, no extra space left of the name */
+.pencil-dev-chip--split {
+	box-sizing: border-box;
+	min-height: 32px;
+	align-items: center;
+	padding: 3px 4px 3px 12px;
+}
+
+.pencil-dev-chip--split:not(:has(.pencil-dev-chip-tool)) {
+	padding-right: 12px;
+}
+
+.pencil-dev-chip--split .pencil-dev-chip-name {
+	padding: 0 4px 0 0;
+	line-height: 1.4;
+}
+
+.pencil-dev-chip--split:not(:has(.pencil-dev-chip-tool)) .pencil-dev-chip-name {
+	padding-right: 0;
+}
+
+/* Class list: a chip, then the CSS it sets */
+.pencil-dev-classlist {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 16px;
+}
+
+.pencil-dev-classitem {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.pencil-dev-chiprow {
+	position: relative;
+	display: flex;
+}
+
+.pencil-dev-swapcount {
+	color: var(--pencil-ink);
+	font-size: 13px;
+}
+
+/* One button look: a pill with the accent colour */
+.pencil-dev-pill {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	margin: 0;
+	padding: 5px 12px;
+	border: 1px solid var(--pencil-accent);
+	border-radius: 999px;
+	background: var(--pencil-panel);
+	color: var(--pencil-accent);
+	cursor: pointer;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.3;
+	text-decoration: none;
+}
+
+.pencil-dev-pill:hover,
+.pencil-dev-pill:focus-visible {
+	background: var(--pencil-accent);
+	color: #fff;
+	outline: none;
+}
+
+.pencil-dev-result .pencil-dev-pill {
+	margin-top: 10px;
+}
+
+/* Up and down buttons on the selection */
+.pencil-dev-nav {
+	position: absolute;
+	left: -2px;
+	top: -34px;
+	display: flex;
+	gap: 4px;
+	pointer-events: auto;
+}
+
+.pencil-dev-box--pinned.is-top .pencil-dev-nav {
+	left: 4px;
+	top: 4px;
+}
+
+.pencil-dev-navbtn {
+	appearance: none;
+	display: inline-grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--pencil-accent);
+	border-radius: 50%;
+	background: var(--pencil-panel);
+	box-shadow: 0 4px 14px rgba(33, 26, 52, 0.18);
+	color: var(--pencil-accent);
+	cursor: pointer;
+}
+
+.pencil-dev-navbtn[hidden] {
+	display: none;
+}
+
+.pencil-dev-navbtn:hover,
+.pencil-dev-navbtn:focus-visible {
+	background: var(--pencil-accent);
+	color: #fff;
+	outline: none;
+}
+
+.pencil-dev-navbtn .dashicons {
+	width: 18px;
+	height: 18px;
+	font-size: 18px;
+}
+
+.pencil-dev-panel .pencil-dev-head {
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+}
+
+.pencil-dev-panel.is-dragging,
+.pencil-dev-panel.is-dragging .pencil-dev-head {
+	cursor: grabbing;
+}

@@ -35,7 +35,15 @@ final class Pencil_Abilities {
 	 * @return bool
 	 */
 	public static function can_resolve() {
-		return current_user_can( 'manage_options' );
+		return Pencil_Client::can_manage();
+	}
+
+	public static function can_read_instructions() {
+		return Pencil_Client::can_manage();
+	}
+
+	public static function can_set_prefix() {
+		return Pencil_Client::can_manage();
 	}
 
 	private static function meta( $readonly, $idempotent ) {
@@ -108,6 +116,44 @@ final class Pencil_Abilities {
 			'can_view'
 		);
 		self::add(
+			'list-templates',
+			'List Templates',
+			'List the template files of the active theme and where each one is used: the pages that use a page template, the front page, specific pages, post types and archives. The list is read from the theme folder, so a new file appears straight away. Requires an administrator or editor.',
+			array( 'pages_limit' => array( 'type' => 'integer', 'minimum' => 0, 'maximum' => 200, 'default' => 10, 'description' => 'How many pages to list per template. pages_total always holds the full count.' ) ),
+			array(),
+			self::meta( true, true ),
+			'can_view'
+		);
+		$slugs   = array_keys( Pencil_AI_Instructions::sections() );
+		$section = array( 'type' => 'string', 'description' => 'Optional. Return one section only. Leave it out to get every section.' );
+		if ( $slugs ) {
+			$section['enum'] = $slugs;
+		}
+		self::add(
+			'get-instructions',
+			'Get Instructions',
+			'Read the Pencilino instructions for building and changing themes. Read them in full before you build or change a theme, and follow them. Do this every time, also for a theme that already exists: the instructions change over time, so bring the parts you work on in line with them and say what you changed. They come in sections. Without a section you get all of them as one text. The site owner can add their own instructions to a section: those follow the default text of that section and win when they conflict with it. The design system section holds the default design basics and the rules for the prefix; the framework field of the result tells you the prefix that is set now. Requires manage_options.',
+			array( 'section' => $section ),
+			array(),
+			self::meta( true, true ),
+			'can_read_instructions'
+		);
+		self::add(
+			'set-prefix',
+			'Set Prefix',
+			'Tell Pencilino which prefix the framework classes and variables of this site use, for example pcl- or rdb-. Call it after you build or change a theme, so Dev mode can tell framework classes from classes that were added later. Only letters, numbers, hyphens and underscores, up to 32 characters. An empty string clears it. Requires manage_options.',
+			array(
+				'prefix' => array(
+					'type'        => 'string',
+					'description' => 'The prefix, for example pcl-.',
+					'maxLength'   => 32,
+				),
+			),
+			array( 'prefix' ),
+			self::meta( false, true ),
+			'can_set_prefix'
+		);
+		self::add(
 			'resolve-comment',
 			'Resolve Comment',
 			'Mark a comment as resolved, or reopen it with resolved set to false. Only the status changes, never the comment itself. Requires manage_options.',
@@ -164,6 +210,52 @@ final class Pencil_Abilities {
 			'has_more' => $has_more,
 			'comments' => $comments,
 		);
+	}
+
+	public static function list_templates( $input ) {
+		$limit     = isset( $input['pages_limit'] ) ? (int) $input['pages_limit'] : 10;
+		$templates = Pencil_Templates::get_all( $limit );
+		return array(
+			'theme'     => wp_get_theme()->get_stylesheet(),
+			'count'     => count( $templates ),
+			'templates' => $templates,
+		);
+	}
+
+	public static function get_instructions( $input ) {
+		$overview = Pencil_AI_Instructions::overview();
+		$slug     = isset( $input['section'] ) ? sanitize_key( $input['section'] ) : '';
+		if ( '' !== $slug ) {
+			foreach ( $overview as $item ) {
+				if ( $item['slug'] === $slug ) {
+					return array(
+						'section' => $item,
+						'text'    => Pencil_AI_Instructions::section_text( $slug ),
+				'framework' => self::framework_info(),
+					);
+				}
+			}
+			return new WP_Error( 'pencilino_unknown_section', 'Unknown section. Use one of: ' . implode( ', ', wp_list_pluck( $overview, 'slug' ) ) . '.' );
+		}
+		return array(
+			'version'  => PENCIL_VERSION,
+			'sections' => $overview,
+			'text'     => Pencil_AI_Instructions::full_text(),
+			'framework' => self::framework_info(),
+		);
+	}
+
+
+	/** The prefix that is set now, so an agent knows it without reading the text. */
+	private static function framework_info() {
+		return array(
+			'prefix' => Pencil_Dev::prefix(),
+		);
+	}
+
+	public static function set_prefix( $input ) {
+		Pencil_Dev::save_prefix( isset( $input['prefix'] ) ? (string) $input['prefix'] : '' );
+		return array( 'prefix' => Pencil_Dev::prefix() );
 	}
 
 	public static function resolve_comment( $input ) {
