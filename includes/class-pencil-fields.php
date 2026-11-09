@@ -16,6 +16,21 @@ final class Pencil_Fields {
 	const TYPES = array( 'text', 'richtext', 'image', 'button' );
 
 	/**
+	 * Rich text length (visible characters) when the theme sets no max_length.
+	 */
+	const RICHTEXT_DEFAULT_MAX = 20000;
+
+	/**
+	 * Longest accepted link address.
+	 */
+	const URL_MAX = 2048;
+
+	/**
+	 * Largest serialized size of all saved values for one site, in bytes.
+	 */
+	const VALUES_MAX_BYTES = 1048576;
+
+	/**
 	 * Fields registered during the current request.
 	 *
 	 * @var array<string, array<string, mixed>>
@@ -134,6 +149,14 @@ final class Pencil_Fields {
 		$values        = self::get_values();
 		$values[ $id ] = $value;
 
+		if ( strlen( maybe_serialize( $values ) ) > self::VALUES_MAX_BYTES ) {
+			return new WP_Error(
+				'pencil_storage_full',
+				__( 'There is no room for more content. Shorten some texts and try again.', 'pencilino-by-rino' ),
+				array( 'status' => 413 )
+			);
+		}
+
 		if ( false === get_option( 'pencil_values', false ) ) {
 			add_option( 'pencil_values', $values, '', 'no' );
 		} else {
@@ -163,7 +186,7 @@ final class Pencil_Fields {
 		$value = preg_replace_callback(
 			'/href="([^"]*)"/i',
 			static function ( $matches ) {
-				return 'href="' . esc_url( wp_specialchars_decode( $matches[1], ENT_QUOTES ) ) . '"';
+				return 'href="' . esc_url( wp_specialchars_decode( $matches[1], ENT_QUOTES ), self::allowed_protocols() ) . '"';
 			},
 			$value
 		);
@@ -172,6 +195,20 @@ final class Pencil_Fields {
 		$value = preg_replace( '#<p>(?:\s|&nbsp;|<br\s*/?>)*</p>#i', '', $value );
 
 		return trim( $value );
+	}
+
+	/**
+	 * Link protocols allowed in rich text and buttons. Relative links always work.
+	 *
+	 * @return string[]
+	 */
+	public static function allowed_protocols() {
+		/**
+		 * Filter the link protocols editors may use.
+		 *
+		 * @param string[] $protocols Protocols without the colon.
+		 */
+		return (array) apply_filters( 'pencil_allowed_protocols', array( 'http', 'https', 'mailto', 'tel', 'sms' ) );
 	}
 
 	/**
@@ -340,16 +377,18 @@ final class Pencil_Fields {
 				return $attachment_id;
 
 			case 'richtext':
-				$value = self::sanitize_richtext( is_scalar( $value ) ? $value : '' );
+				$value      = self::sanitize_richtext( is_scalar( $value ) ? $value : '' );
+				$max_length = ! empty( $schema['max_length'] ) ? absint( $schema['max_length'] ) : self::RICHTEXT_DEFAULT_MAX;
 
-				return self::check_length( wp_strip_all_tags( $value ), isset( $schema['max_length'] ) ? absint( $schema['max_length'] ) : 0 )
+				return self::check_length( wp_strip_all_tags( $value ), $max_length )
 					? $value
-					: self::length_error( $schema['max_length'] );
+					: self::length_error( $max_length );
 
 			case 'button':
 				$value = is_array( $value ) ? $value : array();
 				$text  = isset( $value['text'] ) && is_scalar( $value['text'] ) ? sanitize_text_field( (string) $value['text'] ) : '';
-				$url   = isset( $value['url'] ) && is_scalar( $value['url'] ) ? esc_url_raw( trim( (string) $value['url'] ) ) : '';
+				$raw   = isset( $value['url'] ) && is_scalar( $value['url'] ) ? trim( (string) $value['url'] ) : '';
+				$url   = strlen( $raw ) <= self::URL_MAX ? esc_url_raw( $raw, self::allowed_protocols() ) : '';
 
 				if ( '' === $text ) {
 					return new WP_Error(
