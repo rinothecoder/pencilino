@@ -16,6 +16,13 @@ final class Pencil_Activity {
 	const DB_VERSION = '1';
 
 	/**
+	 * Default number of activity records kept per site.
+	 *
+	 * @var int
+	 */
+	const KEEP = 500;
+
+	/**
 	 * Register activity storage hooks.
 	 *
 	 * @return void
@@ -119,7 +126,40 @@ final class Pencil_Activity {
 			array( '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%d', '%s' )
 		);
 
-		return false !== $result;
+		if ( false === $result ) {
+			return false;
+		}
+
+		self::prune();
+
+		return true;
+	}
+
+	/**
+	 * Keep only the newest records. Old and new values are stored in full, so an
+	 * unbounded log grows with every edit.
+	 *
+	 * @return void
+	 */
+	private static function prune() {
+		global $wpdb;
+
+		/**
+		 * Filter how many activity records a site keeps.
+		 *
+		 * @param int $keep Number of newest records to keep.
+		 */
+		$keep = max( 1, absint( apply_filters( 'pencil_activity_keep', self::KEEP ) ) );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, write path only.
+		$cutoff = $wpdb->get_var(
+			$wpdb->prepare( 'SELECT activity_id FROM %i ORDER BY activity_id DESC LIMIT 1 OFFSET %d', self::table_name(), $keep )
+		);
+
+		if ( $cutoff ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table, write path only.
+			$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE activity_id <= %d', self::table_name(), absint( $cutoff ) ) );
+		}
 	}
 
 	/**
