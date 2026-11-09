@@ -201,6 +201,12 @@ if ( ! function_exists( 'pencilino_image' ) ) {
 		$field         = Pencil_Fields::register( 'image', $id, $args );
 		$attachment_id = $field['value'];
 
+		// A saved image that was deleted from the Media Library falls back to the
+		// theme default, so the slot stays visible and can be replaced again.
+		if ( ! $attachment_id || ! wp_attachment_is_image( $attachment_id ) ) {
+			$attachment_id = isset( $field['schema']['default'] ) ? absint( $field['schema']['default'] ) : 0;
+		}
+
 		if ( ! $attachment_id || ! wp_attachment_is_image( $attachment_id ) ) {
 			return;
 		}
