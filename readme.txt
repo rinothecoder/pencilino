@@ -4,7 +4,7 @@ Tags: frontend editing, ai, custom theme, content editing, client editing
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.4
+Stable tag: 2.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,6 +63,9 @@ Administrators, Editors, and users assigned the Clients role when client mode is
 Yes. Each field has a stable ID, and a saved value always wins over the theme's default. When the AI redesigns a section later, the client's content stays.
 
 == Changelog ==
+
+= 2.0.5 =
+* Pencilino has moved to WordPress.org. This version shows a notice with a link to install it there. Nothing else changed.
 
 = 2.0.4 =
 * Public GitHub release updates and a Check for updates button in Settings. No site token required.
