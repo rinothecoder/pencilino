@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Pencilino
  * Description: Frontend content editing for AI-built WordPress themes. The theme owns the design, your client edits the words and images.
- * Version: 2.2.0
- * Plugin URI: https://github.com/rinothecoder/pencilino
+ * Version: 2.3.0
+ * Plugin URI: https://wordpress.org/plugins/pencilino/
  * Author: Rino de Boer
  * Text Domain: pencilino
  * Requires at least: 6.4
@@ -72,7 +72,7 @@ if ( defined( 'PENCIL_VERSION' ) || class_exists( 'Pencil_Admin', false ) ) {
 	return;
 }
 
-define( 'PENCIL_VERSION', '2.2.0' );
+define( 'PENCIL_VERSION', '2.3.0' );
 define( 'PENCIL_PLUGIN_FILE', __FILE__ );
 define( 'PENCIL_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'PENCIL_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -100,6 +100,7 @@ require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-classes.php';
 require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-modal.php';
 require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-comments.php';
 require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-seo.php';
+require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-editor-styles.php';
 require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-abilities.php';
 require_once PENCIL_PLUGIN_PATH . 'includes/class-pencil-ai-instructions.php';
 
@@ -115,6 +116,7 @@ Pencil_Classes::init();
 Pencil_Modal::init();
 Pencil_Comments::init();
 Pencil_SEO::init();
+Pencil_Editor_Styles::init();
 Pencil_Abilities::init();
 Pencil_AI_Instructions::init();
 

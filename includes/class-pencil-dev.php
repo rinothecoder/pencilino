@@ -49,6 +49,7 @@ final class Pencil_Dev {
 		return array(
 			'intro'  => 'Clean up this whole WordPress site, all pages and all templates, so it follows the Pencilino instructions again.',
 			'read'   => 'First read all Pencilino instructions with the pencilino/get-instructions ability. Read every part in full and do not skip anything: the default instructions and the additions of the site owner come as one document, and the details matter. Then go through the site part by part, from the design system to SEO, mobile, speed and safety, and fix everything that does not follow them.',
+			'fallback' => 'Check that the theme still shows the texts clients edited when Pencilino is off. Every Pencilino helper call in the theme must sit inside a wrapper that calls the helper only when function_exists() confirms it is available, and otherwise reads the saved value from the pencil_values option and falls back to the theme\'s own default text. Add the wrapper wherever it is missing, following the pattern in the Pencilino instructions, and make a backup of the theme first. Then deactivate Pencilino, load every public page and check there are no PHP errors and the edited texts still show. Reactivate Pencilino afterwards and check that editing still works.',
 			'swap'   => 'Class changes made in Dev mode are temporary overrides. Make each change in the templates by replacing the class on that element, and check that the new class gives the same result without the override.',
 			'safe'   => 'The site must look the same afterwards. Tiny differences from merging near-identical values are fine. Never remove or overwrite content or saved Pencilino values, and do not change page URLs. If a fix would change content, a URL or how the site looks, do not make it: list it as a suggestion.',
 			'report' => 'When you are done, give a short summary in non-technical, plain words: what you improved, and what still needs attention, such as missing images, a favicon, texts to fill in and the suggestions you did not carry out.',
@@ -63,7 +64,7 @@ final class Pencil_Dev {
 	public static function master_prompt() {
 		$rules = self::prompt_rules();
 		$lines = array_merge(
-			array( $rules['intro'], '', $rules['read'] ),
+			array( $rules['intro'], '', $rules['read'], '', $rules['fallback'] ),
 			array( '', $rules['safe'], '', $rules['report'] )
 		);
 		$changes = array();

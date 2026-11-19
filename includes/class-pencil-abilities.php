@@ -97,8 +97,16 @@ final class Pencil_Abilities {
 		self::add(
 			'list-changes',
 			'List Changes',
-			'List the newest content edits made through the Pencilino frontend editor, with the field, the old and new value, who made the edit, and the page. Image values are attachment IDs and button values are JSON with text and url. Times are UTC. Edits an agent makes to the theme are not part of this log. Requires an administrator or editor.',
-			array( 'limit' => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 50, 'description' => 'How many of the newest changes to return.' ) ),
+			'List content edits made through the Pencilino frontend editor, newest first, with the field, the old and new value, who made the edit, and the page. Without filters you get the newest 50. To go further back, pass the next_before_id of the previous result as before_id while has_more is true. Filter by field_id (add * at the end for a prefix, for example home.hero.*), user_name, page_id, and since and until (UTC, Y-m-d or Y-m-d H:i:s). Image values are attachment IDs and button values are JSON with text and url. Times are UTC. Edits an agent makes to the theme are not part of this log. Requires an administrator or editor.',
+			array(
+				'limit'     => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 50, 'description' => 'How many changes to return.' ),
+				'before_id' => array( 'type' => 'integer', 'minimum' => 1, 'description' => 'Only changes with an ID lower than this. Use next_before_id from the previous result to page back.' ),
+				'field_id'  => array( 'type' => 'string', 'description' => 'Pencilino field ID, for example home.hero.tekst. End with * to match a prefix, for example home.hero.*.' ),
+				'user_name' => array( 'type' => 'string', 'description' => 'Only changes by this user name, as shown in the log.' ),
+				'page_id'   => array( 'type' => 'integer', 'minimum' => 1, 'description' => 'Only changes on this page ID.' ),
+				'since'     => array( 'type' => 'string', 'description' => 'Only changes at or after this UTC time, Y-m-d or Y-m-d H:i:s.' ),
+				'until'     => array( 'type' => 'string', 'description' => 'Only changes at or before this UTC time, Y-m-d or Y-m-d H:i:s. A date alone includes that whole day.' ),
+			),
 			array(),
 			self::meta( true, true ),
 			'can_view'
@@ -106,9 +114,9 @@ final class Pencil_Abilities {
 		self::add(
 			'list-comments',
 			'List Comments',
-			'List the private element comments that people left on the frontend, 50 per page. Each comment has its page, the comment text, the author and a target: selector, Pencilino field ID, element ID, tag, label, a short text excerpt, and the x and y position of the pin (0 to 1). Check the target data to find the element a comment is about. Requires an administrator or editor.',
+			'List the private element comments that people left on the frontend, 50 per page. Open comments by default; pass status resolved or all to include handled ones. Each comment has its page, the comment text, the author and a target: selector, Pencilino field ID, element ID, tag, label, a short text excerpt, and the x and y position of the pin (0 to 1). Check the target data to find the element a comment is about. Requires an administrator or editor.',
 			array(
-				'status' => array( 'type' => 'string', 'enum' => array( 'open', 'resolved' ), 'default' => 'open', 'description' => 'open (default) or resolved.' ),
+				'status' => array( 'type' => 'string', 'enum' => array( 'open', 'resolved', 'all' ), 'default' => 'open', 'description' => 'open (default), resolved or all.' ),
 				'page'   => array( 'type' => 'integer', 'minimum' => 1, 'default' => 1 ),
 			),
 			array(),
@@ -119,7 +127,7 @@ final class Pencil_Abilities {
 			'list-templates',
 			'List Templates',
 			'List the template files of the active theme and where each one is used: the pages that use a page template, the front page, specific pages, post types and archives. The list is read from the theme folder, so a new file appears straight away. Requires an administrator or editor.',
-			array( 'pages_limit' => array( 'type' => 'integer', 'minimum' => 0, 'maximum' => 200, 'default' => 10, 'description' => 'How many pages to list per template. pages_total always holds the full count.' ) ),
+			array( 'pages_limit' => array( 'type' => 'integer', 'minimum' => 0, 'maximum' => 200, 'default' => 20, 'description' => 'How many pages to list per template. pages_total always holds the full count.' ) ),
 			array(),
 			self::meta( true, true ),
 			'can_view'
@@ -168,8 +176,11 @@ final class Pencil_Abilities {
 	}
 
 	public static function list_changes( $input ) {
-		$rows    = Pencil_Activity::get_recent( isset( $input['limit'] ) ? (int) $input['limit'] : 50 );
-		$changes = array();
+		$limit    = isset( $input['limit'] ) ? min( 200, max( 1, (int) $input['limit'] ) ) : 50;
+		$rows     = Pencil_Activity::query( array_merge( $input, array( 'limit' => $limit ) ) );
+		$has_more = count( $rows ) > $limit;
+		$rows     = array_slice( $rows, 0, $limit );
+		$changes  = array();
 		foreach ( $rows as $row ) {
 			$url       = $row->page_id ? get_permalink( (int) $row->page_id ) : '';
 			$changes[] = array(
@@ -187,13 +198,16 @@ final class Pencil_Abilities {
 			);
 		}
 		return array(
-			'count'   => count( $changes ),
-			'changes' => $changes,
+			'count'          => count( $changes ),
+			'has_more'       => $has_more,
+			'next_before_id' => $has_more && $changes ? $changes[ count( $changes ) - 1 ]['id'] : null,
+			'changes'        => $changes,
 		);
 	}
 
 	public static function list_comments( $input ) {
-		$resolved = isset( $input['status'] ) && 'resolved' === $input['status'];
+		$status   = isset( $input['status'] ) && in_array( $input['status'], array( 'resolved', 'all' ), true ) ? $input['status'] : 'open';
+		$resolved = 'all' === $status ? null : 'resolved' === $status;
 		$page     = isset( $input['page'] ) ? max( 1, (int) $input['page'] ) : 1;
 		$rows     = Pencil_Comments::inbox( $resolved, $page );
 		$has_more = count( $rows ) > 50;
@@ -205,7 +219,7 @@ final class Pencil_Abilities {
 			$comments[]              = $item;
 		}
 		return array(
-			'status'   => $resolved ? 'resolved' : 'open',
+			'status'   => $status,
 			'page'     => $page,
 			'has_more' => $has_more,
 			'comments' => $comments,
@@ -213,8 +227,17 @@ final class Pencil_Abilities {
 	}
 
 	public static function list_templates( $input ) {
-		$limit     = isset( $input['pages_limit'] ) ? (int) $input['pages_limit'] : 10;
+		$limit     = isset( $input['pages_limit'] ) ? (int) $input['pages_limit'] : 20;
 		$templates = Pencil_Templates::get_all( $limit );
+		foreach ( $templates as $i => $template ) {
+			$shown     = isset( $template['pages'] ) ? count( $template['pages'] ) : 0;
+			$total     = isset( $template['pages_total'] ) ? (int) $template['pages_total'] : $shown;
+			$truncated = $total > $shown;
+			$templates[ $i ]['pages_truncated'] = $truncated;
+			if ( $truncated ) {
+				$templates[ $i ]['pages_note'] = sprintf( 'Showing %d of %d pages. Raise pages_limit (max 200) to list more.', $shown, $total );
+			}
+		}
 		return array(
 			'theme'     => wp_get_theme()->get_stylesheet(),
 			'count'     => count( $templates ),

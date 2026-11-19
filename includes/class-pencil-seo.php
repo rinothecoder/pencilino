@@ -1,11 +1,12 @@
 <?php
 /**
- * SEO title and meta description per page, for sites that have no SEO plugin.
+ * Pencilino and SEO plugins.
  *
- * When an SEO plugin is active this class does nothing, so the two never fight over the same tags.
- * Without one, every page and post gets a small "SEO" box with a title and a description. The theme does
- * not print anything for them: this class prints the description and the Open Graph tags, and changes the
- * title that WordPress prints itself. The theme only has to support `title-tag`.
+ * Pencilino has no SEO fields of its own: the SEO plugin of the site owns titles, descriptions and tags.
+ * Pencilino pages keep their content in the theme, so `post_content` is empty and the content analysis of
+ * Rank Math and Yoast SEO sees an empty page. This class gives those plugins the text of the rendered page
+ * in the editor, also when the SEO plugin is installed later. It only runs in the editor, so visitors and
+ * the front end never depend on it.
  *
  * @package Pencilino
  */
@@ -15,7 +16,9 @@ defined( 'ABSPATH' ) || exit;
 final class Pencil_SEO {
 	const META_TITLE       = '_pencil_seo_title';
 	const META_DESCRIPTION = '_pencil_seo_description';
-	const NONCE            = 'pencil_seo_save';
+	const CACHE_PREFIX     = 'pencil_seo_text_';
+	const CACHE_VERSION    = 'pencil_seo_text_version';
+	const CACHE_TIME       = 600;
 
 	/**
 	 * Hook everything up.
@@ -23,50 +26,9 @@ final class Pencil_SEO {
 	 * @return void
 	 */
 	public static function init() {
-		add_action( 'init', array( __CLASS__, 'register_meta' ) );
-		add_action( 'init', array( __CLASS__, 'boot' ), 20 );
-	}
-
-	/**
-	 * Register the two meta keys so they also work through the REST API.
-	 *
-	 * @return void
-	 */
-	public static function register_meta() {
-		foreach ( array( self::META_TITLE => 'sanitize_text_field', self::META_DESCRIPTION => 'sanitize_text_field' ) as $key => $sanitize ) {
-			register_post_meta(
-				'',
-				$key,
-				array(
-					'type'              => 'string',
-					'single'            => true,
-					'show_in_rest'      => true,
-					'sanitize_callback' => $sanitize,
-					'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
-						return current_user_can( 'edit_post', $post_id );
-					},
-				)
-			);
-		}
-	}
-
-	/**
-	 * Turn the features on, unless an SEO plugin is doing the job.
-	 *
-	 * @return void
-	 */
-	public static function boot() {
-		if ( '' !== self::detected_plugin() ) {
-			return;
-		}
-
-		add_action( 'add_meta_boxes', array( __CLASS__, 'add_box' ) );
-		add_action( 'save_post', array( __CLASS__, 'save' ), 10, 2 );
-
-		if ( apply_filters( 'pencil_seo_print_head', apply_filters( 'pencilino_seo_print_head', true ) ) ) {
-			add_filter( 'document_title_parts', array( __CLASS__, 'title_parts' ) );
-			add_action( 'wp_head', array( __CLASS__, 'head' ), 5 );
-		}
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue' ), 99 );
+		add_action( 'pencilino_saved', array( __CLASS__, 'flush' ) );
+		add_action( 'save_post', array( __CLASS__, 'flush' ) );
 	}
 
 	/**
@@ -116,7 +78,216 @@ final class Pencil_SEO {
 	}
 
 	/**
-	 * Saved SEO title of a page or post.
+	 * Load the bridge on the edit screen of a published page or post whose content lives in the theme.
+	 *
+	 * @param string $hook Current admin page.
+	 * @return void
+	 */
+	public static function enqueue( $hook ) {
+		if ( 'post.php' !== $hook ) {
+			return;
+		}
+
+		$rank_math = defined( 'RANK_MATH_VERSION' );
+		$yoast     = defined( 'WPSEO_VERSION' );
+
+		if ( ! $rank_math && ! $yoast ) {
+			return;
+		}
+
+		$post = get_post();
+
+		if ( ! $post instanceof WP_Post || 'publish' !== $post->post_status || ! is_post_type_viewable( $post->post_type ) ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'edit_post', $post->ID ) || '' !== trim( wp_strip_all_tags( (string) $post->post_content ) ) ) {
+			return;
+		}
+
+		/**
+		 * Turn the bridge off for a page, or for the whole site by returning false.
+		 *
+		 * @param bool    $enabled Whether Pencilino gives the page text to the SEO plugin.
+		 * @param WP_Post $post    The page being edited.
+		 */
+		if ( ! apply_filters( 'pencilino_seo_bridge', true, $post ) ) {
+			return;
+		}
+
+		$html = self::page_html( $post );
+
+		if ( '' === $html ) {
+			return;
+		}
+
+		$data = 'window.pencilSeoText = ' . wp_json_encode( $html ) . ';';
+
+		if ( $rank_math ) {
+			wp_register_script( 'pencilino-seo-rank-math', false, array( 'wp-hooks', 'rank-math-analyzer' ), PENCIL_VERSION, true );
+			wp_enqueue_script( 'pencilino-seo-rank-math' );
+			wp_add_inline_script( 'pencilino-seo-rank-math', $data . self::rank_math_script() );
+		}
+
+		if ( $yoast ) {
+			wp_register_script( 'pencilino-seo-yoast', false, array( 'jquery' ), PENCIL_VERSION, true );
+			wp_enqueue_script( 'pencilino-seo-yoast' );
+			wp_add_inline_script( 'pencilino-seo-yoast', $data . self::yoast_script() );
+		}
+	}
+
+	/**
+	 * Add the page text to the Rank Math content analysis.
+	 *
+	 * @return string
+	 */
+	private static function rank_math_script() {
+		return '( function () {
+			if ( ! window.pencilSeoText || ! window.wp || ! wp.hooks ) { return; }
+			wp.hooks.addFilter( "rank_math_content", "pencilino/page-text", function ( content ) {
+				return ( content || "" ) + window.pencilSeoText;
+			} );
+			var tries = 0;
+			( function refresh() {
+				if ( window.rankMathEditor && "function" === typeof window.rankMathEditor.refresh ) {
+					window.rankMathEditor.refresh( "content" );
+				} else if ( tries++ < 40 ) {
+					setTimeout( refresh, 250 );
+				}
+			}() );
+		}() );';
+	}
+
+	/**
+	 * Add the page text to the Yoast SEO content analysis.
+	 *
+	 * @return string
+	 */
+	private static function yoast_script() {
+		return '( function ( $ ) {
+			if ( ! window.pencilSeoText ) { return; }
+			var done = false;
+			function register() {
+				if ( done || ! window.YoastSEO || ! YoastSEO.app || ! YoastSEO.app.registerPlugin ) { return; }
+				done = true;
+				YoastSEO.app.registerPlugin( "pencilino", { status: "ready" } );
+				YoastSEO.app.registerModification( "content", function ( content ) {
+					return ( content || "" ) + window.pencilSeoText;
+				}, "pencilino", 10 );
+			}
+			$( window ).on( "YoastSEO:ready", register );
+			register();
+		}( jQuery ) );';
+	}
+
+	/**
+	 * The content of the rendered page, as a visitor sees it: the main element without scripts, menus and forms.
+	 * Cached for ten minutes, and refreshed when the page or a Pencilino field is saved.
+	 *
+	 * @param WP_Post $post The page.
+	 * @return string Empty when the page could not be read.
+	 */
+	private static function page_html( WP_Post $post ) {
+		$key    = self::CACHE_PREFIX . $post->ID . '_' . (int) get_option( self::CACHE_VERSION, 0 );
+		$cached = get_transient( $key );
+
+		if ( false !== $cached ) {
+			return (string) $cached;
+		}
+
+		$response = wp_remote_get(
+			get_permalink( $post ),
+			array(
+				'timeout'     => 10,
+				'redirection' => 3,
+				'headers'     => array( 'Cache-Control' => 'no-cache' ),
+			)
+		);
+
+		$html = '';
+
+		if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+			$html = self::extract( (string) wp_remote_retrieve_body( $response ) );
+		}
+
+		// Also remember a failed read for a short while, so a blocked loopback does not slow down every page load.
+		set_transient( $key, $html, '' === $html ? 60 : self::CACHE_TIME );
+
+		return $html;
+	}
+
+	/**
+	 * Take the main element of a page and drop what is not content.
+	 *
+	 * @param string $page Full HTML of the page.
+	 * @return string
+	 */
+	private static function extract( $page ) {
+		if ( '' === trim( $page ) ) {
+			return '';
+		}
+
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			if ( ! preg_match( '#<main\b[^>]*>(.*)</main>#is', $page, $match ) ) {
+				return '';
+			}
+			$html = (string) preg_replace( '#<(script|style|svg|nav|footer|form|noscript|template|iframe)\b.*?</\1>#is', '', $match[1] );
+			return trim( $html );
+		}
+
+		$doc      = new DOMDocument();
+		$previous = libxml_use_internal_errors( true );
+		$doc->loadHTML( '<?xml encoding="utf-8" ?>' . $page, LIBXML_NOERROR | LIBXML_NOWARNING );
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
+
+		$root = $doc->getElementsByTagName( 'main' )->item( 0 );
+		$drop = array( 'script', 'style', 'svg', 'nav', 'footer', 'form', 'noscript', 'template', 'iframe' );
+
+		if ( ! $root ) {
+			$root   = $doc->getElementsByTagName( 'body' )->item( 0 );
+			$drop[] = 'header';
+		}
+
+		if ( ! $root ) {
+			return '';
+		}
+
+		foreach ( $drop as $tag ) {
+			foreach ( iterator_to_array( $root->getElementsByTagName( $tag ) ) as $node ) {
+				if ( $node->parentNode ) {
+					$node->parentNode->removeChild( $node );
+				}
+			}
+		}
+
+		// Hidden states (pencil-reveal) only show after an action, so they are not part of the page text.
+		$xpath = new DOMXPath( $doc );
+		foreach ( iterator_to_array( $xpath->query( './/*[@hidden]', $root ) ) as $node ) {
+			if ( $node->parentNode ) {
+				$node->parentNode->removeChild( $node );
+			}
+		}
+
+		$html = '';
+		foreach ( $root->childNodes as $child ) {
+			$html .= $doc->saveHTML( $child );
+		}
+
+		return trim( (string) preg_replace( '/\s+/', ' ', $html ) );
+	}
+
+	/**
+	 * Read the page again on the next visit to the editor.
+	 *
+	 * @return void
+	 */
+	public static function flush() {
+		update_option( self::CACHE_VERSION, (int) get_option( self::CACHE_VERSION, 0 ) + 1, false );
+	}
+
+	/**
+	 * SEO title saved by older Pencilino versions, which had their own SEO box. Kept so older themes keep working.
 	 *
 	 * @param int $post_id Post ID. The current page when 0.
 	 * @return string
@@ -128,7 +299,7 @@ final class Pencil_SEO {
 	}
 
 	/**
-	 * Saved meta description of a page or post.
+	 * Meta description saved by older Pencilino versions. Kept so older themes keep working.
 	 *
 	 * @param int $post_id Post ID. The current page when 0.
 	 * @return string
@@ -159,175 +330,11 @@ final class Pencil_SEO {
 
 		return 0;
 	}
-
-	/**
-	 * Post types that get the box.
-	 *
-	 * @return string[]
-	 */
-	private static function post_types() {
-		$types = get_post_types( array( 'public' => true ), 'names' );
-		unset( $types['attachment'] );
-
-		return array_values( $types );
-	}
-
-	/**
-	 * Use the saved title in the page title WordPress prints. The site name still follows it.
-	 *
-	 * @param array $parts Title parts.
-	 * @return array
-	 */
-	public static function title_parts( $parts ) {
-		$title = self::get_title();
-
-		if ( '' === $title ) {
-			return $parts;
-		}
-
-		$parts['title'] = $title;
-
-		if ( is_front_page() ) {
-			unset( $parts['tagline'] );
-		}
-
-		return $parts;
-	}
-
-	/**
-	 * Print the description and the Open Graph tags.
-	 *
-	 * @return void
-	 */
-	public static function head() {
-		$post_id = self::current_id();
-
-		if ( ! $post_id ) {
-			return;
-		}
-
-		$title       = self::get_title( $post_id );
-		$description = self::get_description( $post_id );
-		$shown_title = '' !== $title ? $title : get_the_title( $post_id );
-		$url         = is_front_page() ? home_url( '/' ) : get_permalink( $post_id );
-		$image       = get_the_post_thumbnail_url( $post_id, 'large' );
-
-		$tags = array(
-			'og:type'      => is_singular( 'post' ) ? 'article' : 'website',
-			'og:title'     => $shown_title,
-			'og:url'       => $url,
-			'og:site_name' => get_bloginfo( 'name' ),
-		);
-
-		if ( '' !== $description ) {
-			$tags['og:description'] = $description;
-		}
-
-		if ( $image ) {
-			$tags['og:image'] = $image;
-		}
-
-		if ( '' !== $description ) {
-			echo '<meta name="description" content="' . esc_attr( $description ) . '">' . "\n";
-		}
-
-		foreach ( $tags as $property => $content ) {
-			if ( '' !== (string) $content ) {
-				echo '<meta property="' . esc_attr( $property ) . '" content="' . esc_attr( $content ) . '">' . "\n";
-			}
-		}
-
-		echo '<meta name="twitter:card" content="' . ( $image ? 'summary_large_image' : 'summary' ) . '">' . "\n";
-	}
-
-	/**
-	 * Add the SEO box to the edit screen.
-	 *
-	 * @return void
-	 */
-	public static function add_box() {
-		foreach ( self::post_types() as $type ) {
-			add_meta_box( 'pencil-seo', __( 'SEO', 'pencilino' ), array( __CLASS__, 'render_box' ), $type, 'normal', 'default' );
-		}
-	}
-
-	/**
-	 * Draw the SEO box.
-	 *
-	 * @param WP_Post $post The post being edited.
-	 * @return void
-	 */
-	public static function render_box( $post ) {
-		wp_nonce_field( self::NONCE, self::NONCE . '_nonce' );
-
-		$title       = (string) get_post_meta( $post->ID, self::META_TITLE, true );
-		$description = (string) get_post_meta( $post->ID, self::META_DESCRIPTION, true );
-		?>
-		<p>
-			<label for="pencil-seo-title"><strong><?php esc_html_e( 'SEO title', 'pencilino' ); ?></strong></label><br>
-			<input type="text" id="pencil-seo-title" name="pencil_seo_title" value="<?php echo esc_attr( $title ); ?>" class="widefat" data-pencil-count="60">
-			<span class="description"><span data-pencil-counter="pencil-seo-title">0</span> / 60. <?php esc_html_e( 'Leave empty to use the page title. The site name is added after it.', 'pencilino' ); ?></span>
-		</p>
-		<p>
-			<label for="pencil-seo-description"><strong><?php esc_html_e( 'Meta description', 'pencilino' ); ?></strong></label><br>
-			<textarea id="pencil-seo-description" name="pencil_seo_description" rows="3" class="widefat" data-pencil-count="155"><?php echo esc_textarea( $description ); ?></textarea>
-			<span class="description"><span data-pencil-counter="pencil-seo-description">0</span> / 155. <?php esc_html_e( 'Leave empty to print no description. Search engines may show their own text.', 'pencilino' ); ?></span>
-		</p>
-		<script>
-			( function () {
-				document.querySelectorAll( '[data-pencil-count]' ).forEach( function ( field ) {
-					var out = document.querySelector( '[data-pencil-counter="' + field.id + '"]' );
-					var max = parseInt( field.getAttribute( 'data-pencil-count' ), 10 );
-					var update = function () {
-						out.textContent = String( field.value.length );
-						out.style.color = field.value.length > max ? '#b32d2e' : '';
-					};
-					field.addEventListener( 'input', update );
-					update();
-				} );
-			}() );
-		</script>
-		<?php
-	}
-
-	/**
-	 * Save the two fields.
-	 *
-	 * @param int     $post_id Post ID.
-	 * @param WP_Post $post    Post object.
-	 * @return void
-	 */
-	public static function save( $post_id, $post ) {
-		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || wp_is_post_revision( $post_id ) ) {
-			return;
-		}
-
-		$nonce = isset( $_POST[ self::NONCE . '_nonce' ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE . '_nonce' ] ) ) : '';
-
-		if ( '' === $nonce || ! wp_verify_nonce( $nonce, self::NONCE ) || ! current_user_can( 'edit_post', $post_id ) ) {
-			return;
-		}
-
-		$fields = array(
-			self::META_TITLE       => 'pencil_seo_title',
-			self::META_DESCRIPTION => 'pencil_seo_description',
-		);
-
-		foreach ( $fields as $key => $name ) {
-			$value = isset( $_POST[ $name ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ $name ] ) ) ) : '';
-
-			if ( '' === $value ) {
-				delete_post_meta( $post_id, $key );
-			} else {
-				update_post_meta( $post_id, $key, $value );
-			}
-		}
-	}
 }
 
 if ( ! function_exists( 'pencilino_seo_plugin' ) ) {
 	/**
-	 * Name of the active SEO plugin, or an empty string when Pencilino handles the SEO fields itself.
+	 * Name of the active SEO plugin, or an empty string when there is none.
 	 *
 	 * @return string
 	 */
@@ -338,7 +345,7 @@ if ( ! function_exists( 'pencilino_seo_plugin' ) ) {
 
 if ( ! function_exists( 'pencilino_seo_title' ) ) {
 	/**
-	 * The SEO title saved for a page or post. Empty when none is set.
+	 * The SEO title saved by older Pencilino versions. Empty when none is set.
 	 *
 	 * @param int $post_id Post ID. The current page when 0.
 	 * @return string
@@ -350,7 +357,7 @@ if ( ! function_exists( 'pencilino_seo_title' ) ) {
 
 if ( ! function_exists( 'pencilino_seo_description' ) ) {
 	/**
-	 * The meta description saved for a page or post. Empty when none is set.
+	 * The meta description saved by older Pencilino versions. Empty when none is set.
 	 *
 	 * @param int $post_id Post ID. The current page when 0.
 	 * @return string

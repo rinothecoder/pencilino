@@ -56,7 +56,7 @@ final class Pencil_Plugin {
 	 * @return bool
 	 */
 	public static function can_edit() {
-		$can_edit = is_user_logged_in() && Pencil_Access::allows( wp_get_current_user() );
+		$can_edit = is_user_logged_in() && Pencil_Access::allows( wp_get_current_user() ) && self::is_default_language();
 
 		/**
 		 * Filter who may open Pencilino and save content.
@@ -64,6 +64,39 @@ final class Pencil_Plugin {
 		 * @param bool $can_edit Whether the current user may edit.
 		 */
 		return (bool) apply_filters( 'pencil_can_edit', apply_filters( 'pencilino_can_edit', $can_edit ) );
+	}
+
+	/**
+	 * Whether the frontend shows the site's default language.
+	 *
+	 * Pencilino saves into the original language. On a translated page the editor
+	 * would show translated text and overwrite the original when saving, so it
+	 * stays off there. Translations are made in the translation plugin instead.
+	 * Reads Polylang and WPML; other setups count as the default language.
+	 *
+	 * @return bool
+	 */
+	public static function is_default_language() {
+		$is_default = true;
+
+		if ( ! is_admin() ) {
+			if ( function_exists( 'pll_current_language' ) && function_exists( 'pll_default_language' ) ) {
+				$current    = pll_current_language();
+				$is_default = ! $current || pll_default_language() === $current;
+			} elseif ( has_filter( 'wpml_current_language' ) ) {
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WPML's own filter.
+				$current    = apply_filters( 'wpml_current_language', null );
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WPML's own filter.
+				$is_default = ! $current || 'all' === $current || apply_filters( 'wpml_default_language', null ) === $current;
+			}
+		}
+
+		/**
+		 * Filter whether the current frontend language is the default language.
+		 *
+		 * @param bool $is_default Whether the default language is shown.
+		 */
+		return (bool) apply_filters( 'pencilino_is_default_language', $is_default );
 	}
 
 	/**

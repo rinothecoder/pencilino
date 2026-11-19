@@ -140,6 +140,14 @@ final class Pencil_Fields {
 			update_option( 'pencil_values', $values, false );
 		}
 
+		/**
+		 * Fires after a Pencilino field is saved, so a site can clear its page cache.
+		 *
+		 * @param string $id    Stable field ID.
+		 * @param mixed  $value Saved value.
+		 */
+		do_action( 'pencilino_saved', $id, $value );
+
 		return $value;
 	}
 

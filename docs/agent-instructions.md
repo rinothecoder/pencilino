@@ -8,7 +8,7 @@
 
 You are building or modifying a custom WordPress theme that integrates with the Pencilino plugin.
 
-This is an AI-first alternative to the traditional page-builder workflow. You handle design, layout, new elements, functionality, and initial content in theme code. Pencilino gives clients protected frontend editing for all static site content after the theme is built.
+This is an AI-first alternative to the traditional page-builder workflow. You handle design, layout, new elements, and initial content in theme code. Site functionality that does not belong to the design, such as post types and form handling, goes in snippets (see Site functionality outside the theme). Pencilino gives clients protected frontend editing for all static site content after the theme is built.
 
 Build normal, maintainable WordPress theme code. Pencilino is a controlled content layer, not a drag-and-drop layout system.
 
@@ -50,7 +50,91 @@ The agent needs access to the complete WordPress project, not only a screenshot 
 
 If optional installed skills are relevant to the task, name the ones you propose to use and ask the user before applying them.
 
+### Ask which plugins to use
+
+Before you start building, check whether the site needs any of these. Look at the user's prompt and, on Path 2, the HTML design: a booking button, a login, a members area or a course overview count too.
+
+- a custom post type or custom fields: a collection the client adds to, such as team members, projects or testimonials, or extra fields on posts or pages;
+- a form, such as a contact or quote form;
+- a shop;
+- bookings or appointments;
+- memberships or online courses.
+
+If it does, always ask the user which plugins they want to use, unless they already told you. Users may already have a license or a favourite. Every site also needs an SEO plugin, and a site with custom code needs a snippet plugin (see Site functionality outside the theme), so include those too, unless one is already active. Check the active plugins first and name them in your question. Ask about everything the site needs in one question, so the user does not get several in a row. For example:
+
+> This site needs a team overview, a contact form and a shop. Which plugins do you want to use for these?
+>
+> - **Team overview (custom post type):** do you want to use a specific plugin for this, such as ACF or JetEngine, or should I build it for you with standard WordPress features?
+> - **Contact form:** do you want to use a specific plugin for this, such as Fluent Forms, Gravity Forms or WPForms, or should I build a custom form for you?
+> - **Shop:** which shop plugin do you want to use, such as WooCommerce, SureCart, FluentCart or Easy Digital Downloads (mainly for digital products)? If you are not sure, tell me what you sell (physical products, digital products, subscriptions) and I will suggest one.
+> - **Bookings (appointments):** which booking plugin do you want to use, such as FluentBooking or Amelia?
+> - **Members area or courses:** which plugin do you want to use, such as MemberPress, LearnDash or FluentCommunity?
+> - **SEO:** which SEO plugin do you want to use, such as Rank Math, Yoast SEO or The SEO Framework?
+> - **Custom code:** I will put the custom code of this site (such as the team post type) in a snippet plugin, so you can see every piece and switch it off. Which one do you want to use, such as FluentSnippet, WPCode or Code Snippets?
+
+Only ask about the items the site needs.
+
+**Custom post types and fields**
+
+- **A plugin:** check that it is installed and active, then create the post type, taxonomies and fields with that plugin, so the client manages them where they expect.
+- **Standard WordPress:** register the post type and taxonomies with `register_post_type()` and `register_taxonomy()`, register custom fields with `register_post_meta()` and give them a meta box on the edit screen. Put this code in a snippet, not in the theme (see Site functionality outside the theme). Link those fields in managed regions with `name:<name attribute>`.
+
+**Forms**
+
+- **A plugin:** build the form in that plugin, place it with the plugin's shortcode or block, and style it with the design system. Mark it as a managed region that links to the form's edit screen in that plugin.
+- **Custom:** build the form's HTML and styling in the theme. Put the handling (sending it with `wp_mail()`, saving submissions and the spam layers below) in a snippet, not in the theme (see Site functionality outside the theme). Ask whether submissions should also be saved in WordPress and whether the client should be able to change the fields, and build that when they want it. Tell the user that email delivery may need an SMTP plugin. Build these spam layers into the form from the start, because nobody checks it for spam after launch:
+  - **Honeypot:** a hidden field that people never see. Drop the message when it has a value.
+  - **Time check:** record when the form was loaded and reject messages sent within a few seconds.
+  - **Rate limit:** allow only a few messages per IP address per hour.
+  - **Server-side checks:** sanitise and validate every input, check the email address, set a maximum length, and treat messages with many links as spam.
+
+  Do not ask the user about spam protection or captcha services. Do not add a captcha unless the user asks for one.
+
+  A WordPress nonce is not spam protection. With page caching, a cached page can serve an expired nonce and block real visitors. Do not let the form depend on a nonce in cached HTML: fetch a fresh one with JavaScript before submitting, or leave it out and rely on the layers above.
+
+**Shop**
+
+- Always use a shop plugin. Never build a cart, checkout or payments in theme code.
+- Build the shop templates and styling the way that plugin documents, and keep products, prices and orders with the plugin.
+
+**Bookings, memberships and courses**
+
+- Always use a plugin, just like for a shop. Never build calendars, availability, logins, paid access or course progress in theme code.
+- Style the plugin's output with the design system, and keep its data with the plugin.
+
+**SEO**
+
+- Install and activate the chosen SEO plugin before you build, so it is there from the start. See the SEO section for what the theme does and does not do.
+
+**For all of these**
+
+- If the chosen plugin is not installed, install and activate it yourself when it is free and you can install plugins. If it needs a license, or you cannot install plugins, ask the user to install it before you continue.
+- When you change a theme that already uses a plugin or method for one of these, keep it and do not ask again.
+
 Both paths finish with the same required checks at the end of this document.
+
+## Site functionality outside the theme
+
+The theme owns the design. Code that belongs to the site rather than to its look goes in a snippet plugin. A redesign then never takes it away, and the site owner can see every piece and switch it off when something goes wrong.
+
+Put in snippets:
+
+- post types, taxonomies and custom fields that you register yourself, when no plugin such as ACF or JetEngine owns them;
+- the handling of custom-built forms: sending, saving submissions and the spam layers. The form's HTML and styling stay in the theme;
+- any other site behaviour that must keep working after a redesign, such as a redirect, an admin tweak or a shortcode for content.
+
+Keep in the theme: the Pencilino wrappers, enqueued CSS and JavaScript, theme supports, menus, editor styles, body classes, template helpers, visible breadcrumbs, and structured data that the SEO plugin does not print. These belong to the design.
+
+How to add snippets:
+
+- Use the active snippet plugin, such as FluentSnippet, WPCode or Code Snippets. If none is active, the user picks one in the plugin question. Install and activate it before you add code.
+- Add every snippet the way that plugin saves snippets itself (its admin screen, its API, or the method its documentation describes), so it shows up in its list and can be switched off there. Afterwards, check that each snippet is listed and active.
+- One snippet per feature, with a clear name and a one-line description, such as "Team post type" or "Contact form handling".
+- Prefix every function, hook and option in a snippet with the site slug, and never call theme functions from a snippet, so it keeps working with any theme.
+- Make sure the site does not break when a snippet is switched off: the theme checks with `function_exists()` or `post_type_exists()` before it uses what a snippet adds.
+- If the user does not want a snippet plugin, put the same code in one small site plugin (`{site-slug}-site`) with one file per feature.
+
+When you change an existing theme that still registers post types or handles forms in theme code, move that code to snippets as part of your change. Keep post type and taxonomy names, field keys and form field names exactly the same, so no content is lost. Make a backup first, check that the site works the same, and report it in your summary.
 
 ## Pencilino theme compatibility contract
 
@@ -80,29 +164,61 @@ The reveal rule lives in the plugin. Do not add reveal CSS to the theme. A theme
 
 ## Required safe theme integration
 
-The website must keep rendering its initial content if Pencilino is temporarily unavailable or deactivated. Never let a missing plugin function cause a fatal error on the public site.
+The website must keep rendering its content if Pencilino is temporarily unavailable or deactivated, including the texts clients edited. Never let a missing plugin function cause a fatal error on the public site.
 
 - Put theme-prefixed wrapper functions in `functions.php` for text, rich text, buttons, images, and managed regions.
 - Inside each wrapper, call the matching Pencilino helper only when `function_exists()` confirms that it is available.
-- Otherwise render the supplied default value with the correct escaping and the same theme-controlled classes and surrounding layout.
+- Otherwise render the client's saved value, read straight from the `pencil_values` option by field ID, and fall back to the supplied default only when there is no saved value. Use the correct escaping and the same theme-controlled classes and surrounding layout. Saved text and rich text values are strings, button values are arrays with `text` and `url`, and image values are attachment IDs.
 - Do not redeclare functions whose names begin with `pencil_`; those belong to the plugin.
-- After building, temporarily deactivate Pencilino and verify that every public page still loads without PHP errors. Then reactivate Pencilino and verify editing.
+- After building, temporarily deactivate Pencilino and verify that every public page still loads without PHP errors and still shows the edited texts. Then reactivate Pencilino and verify editing.
 
 Minimal text-wrapper pattern:
 
 ```php
+function project_saved_value( $id, $default ) {
+    $values = get_option( 'pencil_values', array() );
+
+    return is_array( $values ) && array_key_exists( $id, $values ) ? $values[ $id ] : $default;
+}
+
 function project_text( $id, $args = array() ) {
     if ( function_exists( 'pencilino_text' ) ) {
         pencilino_text( $id, $args );
         return;
     }
 
-    echo esc_html( isset( $args['default'] ) ? $args['default'] : '' );
+    echo esc_html( project_saved_value( $id, isset( $args['default'] ) ? $args['default'] : '' ) );
 }
 ```
 
-Use a prefix derived from the real theme slug instead of `project_`, and apply the same pattern to the other Pencilino field types. The fallback exists for resilience; Pencilino remains a required plugin for frontend editing.
+Use a prefix derived from the real theme slug instead of `project_`, and apply the same pattern to the other Pencilino field types. The fallback keeps the site showing the client's edits while Pencilino is off; only editing stops. Pencilino remains a required plugin for frontend editing.
 
+## Multiple languages
+
+Do not build a site differently because a translation plugin might be added later. These two rules keep every site ready for one.
+
+### All text is real text in the HTML
+
+Every text a visitor reads must be in the HTML. Never put text in an image, in CSS (`content:`), or in JavaScript strings that write it into the page. Translation plugins that translate the finished page, such as TranslatePress, Weglot and GTranslate, only find text in the HTML; anything else stays untranslated. Text that only appears after an action, such as a "Copied" label, goes in the HTML as a hidden element (see Hidden states for editors) that JavaScript shows.
+
+### Translating with WPML or Polylang
+
+These plugins translate Pencilino texts in their own string translation screen (Polylang: Languages > Translations; WPML: String Translation). Pencilino stays off on translated pages, so a save can never overwrite the original language. Do not build per-language fields, page copies or language checks for Pencilino texts in the theme.
+
+Every theme ships its own `wpml-config.xml` in the theme root, so the translations keep working when Pencilino is off. Pencilino has the same file, but the plugin's copy is only read while Pencilino is active. Copy it exactly:
+
+```xml
+<?xml version="1.0"?>
+<wpml-config>
+	<admin-texts>
+		<key name="pencil_values">
+			<key name="*" />
+		</key>
+	</admin-texts>
+</wpml-config>
+```
+
+Add it to every theme, also when no translation plugin is installed. It does nothing until one is.
 ## Content continuity
 
 You may write the initial content for a Pencilino-owned field by providing its `default` value. If a client later saves a replacement through Pencilino, that saved value becomes the current content and must take precedence over the theme default.
@@ -119,7 +235,7 @@ Content continuity depends on stable field IDs and Pencilino storage. It does no
 
 ## Non-negotiable rules
 
-1. The theme owns layout, HTML structure, CSS, JavaScript, responsive behaviour, animations, and functionality.
+1. The theme owns layout, HTML structure, CSS, JavaScript, responsive behaviour, and animations. Site functionality lives in snippets (see Site functionality outside the theme).
 2. Every content value has one owner and one source of truth.
 3. Use Pencilino helpers for every static client-facing content value authored in the theme. You may provide the initial value, but a client's saved Pencilino value overrides that default.
 4. Never copy, mirror, or synchronise data from ACF, JetEngine, WooCommerce, WordPress, or external APIs into Pencilino.
@@ -132,16 +248,28 @@ Content continuity depends on stable field IDs and Pencilino storage. It does no
 11. Make the homepage a real published Page and assign it as the static front page in WordPress.
 12. Do not use Gutenberg block content to build Pencilino-managed page layouts.
 
-## Shared parts: header, footer and repeated sections
+## Shared parts and components
 
-A part that appears on more than one page lives in exactly one file. The default for every page, including every new page, is the one global header and the one global footer.
+A part that appears on more than one page lives in exactly one file. A shared part shows the same content everywhere (header, footer, newsletter band). A component shows the same design with different content each time (team card, testimonial, pricing card). The default for every page, including every new page, is the one global header and the one global footer.
 
 - The `<head>`, site header and navigation go in `header.php`. The site footer and `wp_footer()` go in `footer.php`. Every template calls `get_header()` and `get_footer()`.
 - Do not paste the header, footer or any repeated section into each template. A new page uses the global ones without being asked.
 - Only when the user asks for something different on a specific page, for example a landing page with a simpler menu or no navigation, build that variation for that page only. Prefer an argument over a copy: `get_header( null, array( 'solid' => false ) )`, read in `header.php` as `$args`. If the difference is bigger, use a named file (`header-landing.php` with `get_header( 'landing' )`). Say in your summary which pages differ and why.
 - Set page-type body classes with the `body_class` filter in `functions.php`, not in each template.
-- Other repeated sections (call-to-action band, newsletter block, card) go in `template-parts/` and are loaded with `get_template_part()`.
+- Other shared sections (call-to-action band, newsletter block) go in `template-parts/` and are loaded with `get_template_part()`.
 - Pencilino fields and managed regions in a shared part keep one ID, so the client edits them once for the whole site.
+
+### Components
+
+Build a repeated design once and reuse it, so every copy looks and works the same and a new one starts from a finished piece instead of loose classes.
+
+- **When:** a design used in two or more places becomes a component. Something used once stays in its template.
+- **One file:** each component lives in `template-parts/components/`, for example `template-parts/components/team-card.php`, and is loaded with `get_template_part( 'template-parts/components/team-card', null, $args )`.
+- **Filled through `$args`:** the template passes what changes (field IDs, an image, a link, a variant). The component file holds the markup that stays the same. Give `$args` defaults with `wp_parse_args()`, so a missing value never breaks the layout.
+- **Editable:** every use passes its own Pencilino field IDs in `$args` (for example `home-team-1-name`), so each card is edited on its own. Never let two uses share an ID by accident.
+- **Variants, not copies:** a small difference (dark background, image on the right) is a `variant` argument and a variant class, not a second file.
+- **Lists:** many items of the same kind that the client adds or removes (team members, testimonials, projects) come from a post type, a repeater or the plugin that owns that content, and the template loops through them with the same component. Do not paste fixed copies of a card into a template.
+- **Styling:** every component has one component class. See Components are complete under Design system rules.
 ## Pages, URLs, and templates
 
 WordPress Pages remain the source of truth for page administration and routing even though Gutenberg is not used as the page builder.
@@ -379,6 +507,8 @@ For every new static client-facing image:
 
 Do not use `get_stylesheet_directory_uri()`, theme-relative image paths, or hard-coded CSS `url(...)` values for static client-facing images. For a hero or other visual background, render the Pencilino image as a positioned `<img>` and use theme CSS such as `object-fit` and `object-position` to preserve the design.
 
+When theme code shows any Media Library image, also outside `pencilino_image()`, load it by its attachment ID (for example with `wp_get_attachment_image()`), never by writing its file URL into a template or CSS file. File names can change, for example when an image plugin converts a JPG to WebP, and a hard-coded URL then breaks.
+
 This rule applies to editable content imagery such as hero photos, team portraits, project images, product-style visuals, and meaningful illustrations. Structural design assets such as interface icons, decorative textures, masks, cursors, and non-content SVG ornaments may remain in the theme when clients are not expected to replace them. A client-editable logo or brand image belongs in the Media Library; a purely structural icon belongs to the theme.
 
 The theme owns the presentation of an image, including its aspect ratio, crop, sizing, position, and responsive behaviour. WordPress owns the media file and its metadata. Pencilino stores the selected attachment ID so the client can replace the image without changing the layout.
@@ -488,6 +618,7 @@ This is about content that WordPress owns: the title, text, excerpt and featured
 - **Use the right tool.** Write content through the block abilities of your WordPress connection when they exist. When you have to use `wp_insert_post` or `wp_update_post`, build the content with `serialize_blocks()` or write the block comments yourself.
 - **Keep to simple core blocks** for text content: paragraph, heading, list, quote, image and buttons. The theme owns the layout, so no groups, columns or cover blocks for content that a template renders.
 - **Dummy and seed content follows the same rule.** Test content that is not in blocks looks broken to the client.
+- **Style the block editor.** The editor does not load the theme's front-end CSS, so without help every post opens in the browser's default serif font. Add `add_theme_support( 'editor-styles' )` and `add_editor_style( 'assets/css/editor.css' )` in `functions.php`. In `editor.css`, load the same local fonts with `@font-face` and set the body, heading, link, list and quote styles with the theme's own font families and title scale. Declare the variables the file uses inside `editor.css` itself, on `body`, because the editor does not read the front-end `:root`. Keep it small: typography, text colour and a readable content width only. Never load fonts from an outside server. When a theme has no editor styles, Pencilino adds a plain system-font fallback, so do not rely on it for a finished theme.
 - **Custom fields live in the Meta Boxes panel.** In the block editor, fields from ACF, JetEngine and other plugins sit in the Meta Boxes panel at the bottom of the screen. Pencilino's edit popup opens that panel and points at the field that was clicked. Still give every managed region its `field`, so the popup knows where to point.
 - **Check it.** After you create or change content, open one entry of every post type in the editor. There must be no Classic block, and the custom fields must be reachable.
 ## Design system rules
@@ -499,7 +630,7 @@ These rules apply to every build, whether you use the default basics below or th
 - **Global first.** Styling that appears in more than one place is one shared class, used everywhere. Custom components and extra buttons are fine, but build them on the shared variables so they can be reused and extended, not tied to one page.
 - **No dead code.** Every class in a template has a CSS rule or is used by a script, and every CSS rule is used somewhere. Remove what does nothing, but search the whole theme and its scripts first.
 - **One property, one owner.** Two classes on one element never set the same property. The size and the colour of text are separate classes. Direction, alignment and gap are separate classes. So classes stack in any order and never fight. There are no override classes.
-- **Components are complete.** A button, card or badge sets its own background, text colour, border and radius in one class. Never stack a `bg-*`, `rounded-*` or `shadow-*` class on a component.
+- **Components are complete.** A component (button, card, badge, team card, testimonial) is one class that sets its own background, border, radius, shadow, padding and the layout of its inside (flex or grid with a gap), all from variables. Never stack `bg-*`, `rounded-*`, `shadow-*`, `pad-*` or `gap-*` classes on a component. Text inside it keeps the normal type classes (`title-4`, `body-m`) and colour roles, so it follows the type scale. A part the type classes do not cover gets a class named after the component (`team-card__image`). To change every card, change the component class, never each use.
 - **A starting point, not a cage.** If the site needs more (a second badge, a sidebar layout, a secondary colour), add a variable or class that follows the same rules and the same naming. Do not build a second system next to it.
 - **Layout:** a container that holds several children is a flex or grid container with a `gap` from the size scale. Use a margin only to add extra space at one specific place, such as more room above a single heading. Do not space siblings with margins. The Gap setting in Dev mode only works on flex or grid.
 - **Missing pieces:** if the site needs a background, spacing step, corner radius or shadow that does not exist yet, add it as a variable and a class. Do not write the value in a component.
@@ -678,7 +809,7 @@ Never combine `boxed-*` with `pad-lr-*` or an all-sides `pad-*` class.
 - For grids, write a project class with CSS grid (for example `grid-3`) and combine it with a gap class.
 
 **Components.**
-- `card`: background light 1, 1px solid border in light 3, radius `--radius-m`. No padding: pair it with a `pad-*` class.
+- `card`: background light 1, 1px solid border in light 3, radius `--radius-m`, padding `--size-24`, and a flex column with gap `--size-12`. A card with other spacing or colours is a second card class (`card-2`), not utility classes on top.
 - `badge-1`: `--body-size-s`, weight 600, letter-spacing 0.03em, padding 4px 12px from the size scale, radius 9999px, inline-block, background `--primary-transparent-1`, text brand 2. A second style is the next number (`badge-2`) with only the colours changed.
 
 ### How a section is built
@@ -687,12 +818,13 @@ One element carries the whole section, always the same four things: a `bg-*` cla
 
 - Standard section: `bg-light-2 boxed-m pad-tb-80 flex-column gap-32`, holding `sub-title subtitle-on-light`, `title-2 heading-on-light` and `body-m body-on-light`.
 - Dark hero: `bg-dark-1 boxed-l pad-tb-128 flex-column gap-24 text-center body-on-dark`, holding `sub-title subtitle-on-dark`, `title-1 heading-on-dark`, `body-l` and `btn-solid-on-dark`.
-- Card: `card pad-24 flex-column gap-12`, holding `badge-1`, `title-4 heading-on-light`, `body-m body-on-light` and `text-link link-on-light`.
+- Card: `card`, holding `badge-1`, `title-4 heading-on-light`, `body-m body-on-light` and `text-link link-on-light`.
 
 ### Before you finish
 
 - Every value in a class comes from a variable. No stray hex values or pixel values.
-- No element has two classes that set the same property, for example `boxed-m` with `pad-lr-40`, or `card` with `bg-light-1`. This includes your own project classes.
+- No element has two classes that set the same property, for example `boxed-m` with `pad-lr-40`, or `card` with `bg-light-1` or `pad-24`. This includes your own project classes.
+- Every design used more than once is a component: one file in `template-parts/components/` and one component class.
 - No two variables or classes do almost the same thing, styling that repeats uses one shared class, and there are no classes without a rule or rules without a class.
 - Every class and variable of the framework carries the prefix, and what you added yourself does not.
 - The size variables follow the 4 point scale and the name matches the value (`--pcl-size-16` is 16px, with your prefix). Dev mode checks this.
@@ -720,51 +852,39 @@ Also create a brand guide: one page that shows the design system as it really is
 - Keep the CSS minimal. Repeated styling becomes one class. Colours, fonts, sizes and spacing come from variables, never hard-coded.
 
 ## SEO
-Pencilino pages keep their content in templates and Pencilino fields, so `post_content` is empty. A search engine reads the rendered page and is fine with that. SEO plugins are not: their analysis reads `post_content` and reports a near-empty page. Handle SEO the same way on every site.
 
-### Step 0: find out who owns SEO
+Pencilino pages keep their content in templates and Pencilino fields, so `post_content` is empty. Search engines read the rendered page and are fine with that. The SEO plugin owns the SEO of the site. Build the theme so any SEO plugin can take over, also one that is installed later, without changes to the theme.
 
-Run `pencilino_seo_plugin()`. It returns the name of the active SEO plugin, or an empty string. Also look at the list of active plugins yourself, because the function only knows the common ones. Then follow path A or path B. Never mix them.
+### The SEO plugin
 
-### Path A: an SEO plugin is active
+- Every site gets an SEO plugin. It is part of the plugin question (see Ask which plugins to use). Install and activate the chosen plugin before you build.
+- The SEO plugin owns titles, meta descriptions, Open Graph and social tags, canonical URLs, robots settings, the sitemap and redirects.
+- Fill in an SEO title (about 60 characters) and a meta description (about 155 characters) for every page in the SEO plugin, written from the real page content. If you have no real text to base them on, leave them empty.
+- Pencilino gives Rank Math and Yoast SEO the text of the rendered page in the editor, so their content analysis works, also when the plugin is installed later. Do not build this yourself. When you change an older theme that has its own version (often `inc/seo.php` with `rank_math_content` or `registerModification`), remove it, so the page text is not counted twice.
+- Older Pencilino versions had their own SEO box, saved in the post meta `_pencil_seo_title` and `_pencil_seo_description`. That box is gone. When you change a site that has values in those fields, copy them into the SEO plugin and tell the user.
 
-- The SEO plugin owns titles, meta descriptions, Open Graph, schema, the sitemap and redirects. The theme only calls `add_theme_support( 'title-tag' )`. Never print meta tags or Open Graph tags from the theme. Pencilino's own SEO box is hidden in this case.
-- Give the plugin's content analysis the text of the rendered page. Do this only for published pages with an empty `post_content`, only in the post editor, and only for the plugin that is active.
-  - Get the text by requesting the public URL with `wp_remote_get`. Keep the `<main>` element, remove `script`, `style`, `svg`, `nav`, `footer` and `form`, and cache the result in a transient of 10 minutes at most. If the request fails (password protection, basic auth, blocked loopback), return an empty string and tell the user. Do not guess.
-  - Pass the HTML to the editor script as JSON (`wp_json_encode`), never as concatenated strings.
-  - **Rank Math:** enqueue a script with the dependencies `wp-hooks` and `rank-math-analyzer`, add the content with `wp.hooks.addFilter( 'rank_math_content', … )` and call `rankMathEditor.refresh( 'content' )`.
-  - **Yoast SEO:** after the `YoastSEO:ready` event, call `YoastSEO.app.registerPlugin( name, { status: 'ready' } )` and `YoastSEO.app.registerModification( 'content', callback, name, 10 )`.
-  - **Any other plugin:** look up its documented analysis API. Do not guess hook names. If there is none, say so in your report.
-- Put this code in `inc/seo.php`, required from `functions.php`, with the theme prefix on every function.
-- Check it in the editor: the keyword-in-content and word count checks must reflect the visible page text. If you cannot open the editor, tell the user to check it.
+### The theme
 
-### Path B: no SEO plugin
-
-Pencilino handles it. Do not build your own SEO fields.
-
-- Every page and post has an **SEO** box with an SEO title and a meta description. The values live in the post meta `_pencil_seo_title` and `_pencil_seo_description` (also readable and writable through the REST API).
-- Pencilino prints the meta description and the Open Graph tags, and uses the SEO title in the page title. The theme only needs `add_theme_support( 'title-tag' )`. Do not print these tags from the theme as well.
-- Fill the box for every page you build: a unique SEO title (about 60 characters) and a description (about 155 characters), written from the actual page content. If you have no real text to base it on, leave the field empty. An empty description prints nothing, and an empty title falls back to the page title.
-- If the user wants the theme to print the tags itself, return `false` from the filter `pencilino_seo_print_head` and read the values with `pencilino_seo_title()` and `pencilino_seo_description()`.
-- The theme owns structured data. Print JSON-LD with `wp_json_encode` in `wp_head`: the organisation (or `LocalBusiness`), breadcrumbs, and `FAQPage` when the site has FAQ content (see below).
-- Leave the WordPress core sitemap (`wp-sitemap.xml`) on. Add a redirect plugin or a redirect rule for old URLs.
-
-### Both paths
-
-- Every template has exactly one `<h1>` and one `<main>` around the page content.
+- Call `add_theme_support( 'title-tag' )`. Never print a `<title>` yourself.
+- Never print meta description, Open Graph, Twitter, canonical or robots tags from the theme, also not while no SEO plugin is active.
+- Every template has exactly one `<h1>` and one `<main>` around the page content. SEO plugins and search engines read the content from there.
 - Every image has alt text, set in the Media Library when the image is added. Decorative images get an empty `alt`.
+- Leave the WordPress core sitemap on. The SEO plugin replaces it with its own.
+
+### Structured data
+
+- The SEO plugin prints the organisation, website and breadcrumb structured data. Only add JSON-LD from the theme for what the plugin does not print, and check the page source first. Never print a type twice.
 - Keep FAQ questions and answers in one source (a Pencilino field or a repeater). A dedicated FAQ page reads from that same source, so editing happens in one place. The questions and answers must be visible on the page that carries the markup.
-- Print `FAQPage` JSON-LD from that source, with plain-text answers (`wp_strip_all_tags`), and nothing when there are no questions. In path A, first check that the SEO plugin does not already print `FAQPage` for that page. Never output it twice.
+- When the SEO plugin does not print `FAQPage` for the FAQ, print it from that source with `wp_json_encode` in `wp_head`, with plain-text answers (`wp_strip_all_tags`), and nothing when there are no questions.
 - Do not promise rich results for FAQ markup. Google dropped FAQ rich results in May 2026 (reported by Search Engine Journal). The value is the content on the page.
 
 ### When rebuilding an existing site
 
-Before building, list every old URL. Keep slugs where you can, add a 301 redirect for the rest, and test every old URL at the end. Report the ones that have no target.
+Before building, list every old URL. Keep slugs where you can, add a 301 redirect for the rest (in the SEO plugin or a redirect plugin), and test every old URL at the end. Report the ones that have no target.
 
 ### Temporary domains
 
 Keep WordPress "Discourage search engines" on until launch. Add turning it off, submitting the sitemap and running a Rich Results Test to the launch checklist.
-
 ## Mobile and accessibility
 
 These rules protect the site. They never take a design decision away from the user. Where something is a choice (the exact breakpoints, which fonts), follow the template or the user, and say in your summary what you did.
@@ -796,11 +916,13 @@ These rules protect the site. They never take a design decision away from the us
 ## Required checks before completing a theme change
 
 - Every public page has a WordPress Page record and appears under **Pages**.
-- The header and footer exist once (`header.php`, `footer.php`) and no template contains its own copy. Every page uses them, unless the user asked for a different header or footer on that page. Repeated sections live in `template-parts/`.
+- The header and footer exist once (`header.php`, `footer.php`) and no template contains its own copy. Every page uses them, unless the user asked for a different header or footer on that page. Repeated sections live in `template-parts/`, and every design used more than once is a component in `template-parts/components/`.
 - The chosen starting path was followed: direct theme build or complete HTML-template conversion.
+- Post types, taxonomies, fields and form handling that you wrote yourself are snippets (one per feature, clearly named, listed and active in the snippet plugin), not theme code.
 - The homepage is a published Page assigned as the static front page.
 - `front-page.php` owns the homepage layout; the fallback `index.php` is not being used as a hidden homepage.
 - Gutenberg block content is not being used as the layout source for Pencilino-managed pages.
+- The theme styles the block editor (`add_editor_style()` with an `editor.css` that uses the theme's local fonts), so posts in the editor do not show the browser's default serif font.
 - Every static client-facing content value uses one appropriate Pencilino helper.
 - Every static client-facing image exists in the WordPress Media Library and uses `pencilino_image()`.
 - Every Pencilino image field declares a design aspect ratio and renders inside a fixed frame.
@@ -834,9 +956,10 @@ These rules protect the site. They never take a design decision away from the us
 - Missing site basics (favicon, share image) are listed in the summary, not invented.
 - Templates remain semantic, accessible, and layout-controlled by the theme.
 - No client editing control can modify design or behaviour.
-- `pencilino_seo_plugin()` was checked and the matching path (A or B) was followed.
-- Path A: `inc/seo.php` exists, is required from `functions.php`, and the SEO plugin's analysis sees the page text (checked in the editor).
-- Path B: every page has an SEO title and description (or a deliberate empty one), and the page source prints one `<title>`, one meta description and no duplicate Open Graph tags.
+- The chosen SEO plugin is active, and every page has an SEO title and description in it (or a deliberate empty one).
+- The theme supports `title-tag`, prints no meta description, Open Graph, canonical or robots tags of its own, and has no SEO bridge code.
+- `wpml-config.xml` is in the theme root, identical to the one in these instructions.
+- The page source prints one `<title>`, one meta description and no duplicate Open Graph tags or structured data.
 - Each template has one `<h1>` and one `<main>`, and every image has alt text.
 - When the site has FAQs, `FAQPage` JSON-LD is printed once per FAQ page.
 
@@ -854,6 +977,7 @@ These rules protect the site. They never take a design decision away from the us
 - Put a static client-facing image in a theme `assets` directory or reference it with a theme-relative URL.
 - Define theme styles for WordPress core UI class names such as `.media-frame`, `.attachment`, `.thumbnail`, or `.button`.
 - Let an uploaded image's natural dimensions determine a component's size.
+- Paste fixed copies of the same card or block into templates instead of one component.
 - Omit the aspect ratio because the initial image already happens to fit the design.
 - Save complete page HTML in Pencilino.
 - Load fonts from Google Fonts or any other outside server.
@@ -870,7 +994,8 @@ These rules protect the site. They never take a design decision away from the us
 - Mark a mixed-owner card or loop item as though one provider owns the complete layout.
 - Add a provider edit link without verifying that it opens the correct record or settings screen.
 - Build Elementor, Divi, WPBakery, or Gutenberg-style layout editing into the theme.
-- Print meta description or Open Graph tags from the theme while an SEO plugin or Pencilino's SEO box already does it.
+- Print meta description, Open Graph, canonical or robots tags from the theme.
 - Create your own SEO title or description fields in a Pencilino-built theme.
-- Guess the analysis API of an unknown SEO plugin.
+- Build your own bridge to the content analysis of an SEO plugin. Pencilino does that.
+- Register post types, taxonomies or fields, or handle form submissions, in theme code.
 - Write SEO titles or descriptions that are not based on the real page content.

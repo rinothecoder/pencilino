@@ -62,26 +62,75 @@ final class Pencil_Admin_Changelog {
 		<?php
 	}
 
+	/**
+	 * Short message after a bulk action.
+	 *
+	 * @param string $done  Action that ran.
+	 * @param int    $count Number of comments changed.
+	 * @return string
+	 */
+	public static function bulk_notice( $done, $count ) {
+		if ( ! $count ) {
+			return __( 'No comments were changed.', 'pencilino' );
+		}
+		$number = number_format_i18n( $count );
+		if ( 'resolve' === $done ) {
+			/* translators: %s: number of comments. */
+			return sprintf( _n( '%s comment resolved.', '%s comments resolved.', $count, 'pencilino' ), $number );
+		}
+		if ( 'reopen' === $done ) {
+			/* translators: %s: number of comments. */
+			return sprintf( _n( '%s comment reopened.', '%s comments reopened.', $count, 'pencilino' ), $number );
+		}
+		if ( 'delete' === $done ) {
+			/* translators: %s: number of comments. */
+			return sprintf( _n( '%s comment deleted.', '%s comments deleted.', $count, 'pencilino' ), $number );
+		}
+		/* translators: %s: number of comments. */
+		return sprintf( _n( 'Undone: %s comment moved back.', 'Undone: %s comments moved back.', $count, 'pencilino' ), $number );
+	}
+
 	private static function render_comments() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only inbox filtering.
 		$resolved = isset( $_GET['pencil-comment-status'] ) && 'resolved' === $_GET['pencil-comment-status'];
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only pagination.
 		$page = isset( $_GET['pencil-comment-page'] ) ? max( 1, absint( $_GET['pencil-comment-page'] ) ) : 1;
-		$rows = Pencil_Comments::inbox( $resolved, $page );
-		$more = count( $rows ) > 50;
-		$rows = array_slice( $rows, 0, 50 );
-		$base = add_query_arg( 'page', Pencil_Admin::MENU_SLUG, admin_url( 'admin.php' ) );
-		$status = $resolved ? 'resolved' : 'open';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only message after a bulk action.
+		$done = isset( $_GET['pencil-comment-done'] ) ? sanitize_key( wp_unslash( $_GET['pencil-comment-done'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only message after a bulk action.
+		$changed    = isset( $_GET['pencil-comment-count'] ) ? absint( $_GET['pencil-comment-count'] ) : 0;
+		$rows       = Pencil_Comments::inbox( $resolved, $page );
+		$more       = count( $rows ) > 50;
+		$rows       = array_slice( $rows, 0, 50 );
+		$base       = add_query_arg( 'page', Pencil_Admin::MENU_SLUG, admin_url( 'admin.php' ) );
+		$status     = $resolved ? 'resolved' : 'open';
+		$can_manage = Pencil_Client::can_manage();
+		$open_total = Pencil_Comments::count_status( false );
+		$res_total  = Pencil_Comments::count_status( true );
+		$total      = $resolved ? $res_total : $open_total;
 		?>
 				<div class="pencil-page-intro">
 					<span class="pencil-eyebrow"><?php esc_html_e( 'Client feedback', 'pencilino' ); ?></span>
 					<h2><?php esc_html_e( 'Comments', 'pencilino' ); ?></h2>
 				</div>
 
+				<?php if ( in_array( $done, array( 'resolve', 'reopen', 'delete', 'undo' ), true ) ) : ?>
+					<div class="pencil-admin__notice" role="status" data-pencil-notice>
+						<span><?php echo esc_html( self::bulk_notice( $done, $changed ) ); ?></span>
+						<?php if ( $can_manage && $changed && in_array( $done, array( 'resolve', 'reopen' ), true ) && Pencil_Comments::has_undo() ) : ?>
+							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="pencil_undo_comments"><?php wp_nonce_field( 'pencil_undo_comments' ); ?><button class="pencil-admin__linkbutton" type="submit"><?php esc_html_e( 'Undo', 'pencilino' ); ?></button></form>
+						<?php endif; ?>
+					</div>
+				<?php endif; ?>
+
 				<nav class="pencil-admin__filters" aria-label="<?php esc_attr_e( 'Comment status', 'pencilino' ); ?>">
-					<a class="pencil-admin__edit<?php echo ! $resolved ? ' pencil-admin__edit--active' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'pencil-comment-status', 'open', $base ) . '#comments' ); ?>"<?php echo ! $resolved ? ' aria-current="page"' : ''; ?>><?php esc_html_e( 'Open', 'pencilino' ); ?></a>
-					<a class="pencil-admin__edit<?php echo $resolved ? ' pencil-admin__edit--active' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'pencil-comment-status', 'resolved', $base ) . '#comments' ); ?>"<?php echo $resolved ? ' aria-current="page"' : ''; ?>><?php esc_html_e( 'Resolved', 'pencilino' ); ?></a>
+					<a data-comment-filter="open" class="pencil-admin__edit<?php echo ! $resolved ? ' pencil-admin__edit--active' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'pencil-comment-status', 'open', $base ) . '#comments' ); ?>"<?php echo ! $resolved ? ' aria-current="page"' : ''; ?>><?php echo esc_html( sprintf( /* translators: %s: number of open comments. */ __( 'Open (%s)', 'pencilino' ), number_format_i18n( $open_total ) ) ); ?></a>
+					<a data-comment-filter="resolved" class="pencil-admin__edit<?php echo $resolved ? ' pencil-admin__edit--active' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'pencil-comment-status', 'resolved', $base ) . '#comments' ); ?>"<?php echo $resolved ? ' aria-current="page"' : ''; ?>><?php echo esc_html( sprintf( /* translators: %s: number of resolved comments. */ __( 'Resolved (%s)', 'pencilino' ), number_format_i18n( $res_total ) ) ); ?></a>
 				</nav>
+
+				<?php if ( $resolved ) : ?>
+					<p class="pencil-admin__hint"><?php esc_html_e( 'Resolved comments are kept until you delete them. Deleting here removes them for good.', 'pencilino' ); ?></p>
+				<?php endif; ?>
 
 				<?php if ( ! $rows ) : ?>
 					<div class="pencil-admin__empty">
@@ -90,6 +139,36 @@ final class Pencil_Admin_Changelog {
 						<p><?php echo esc_html( $resolved ? __( 'Comments you resolve move here.', 'pencilino' ) : __( 'Private notes left on the website appear here.', 'pencilino' ) ); ?></p>
 					</div>
 				<?php else : ?>
+					<?php if ( $can_manage ) : ?>
+						<form id="pencil-bulk-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<input type="hidden" name="action" value="pencil_bulk_comments">
+							<input type="hidden" name="select_all" value="0">
+							<?php wp_nonce_field( 'pencil_bulk_comments' ); ?>
+						</form>
+
+						<?php if ( $resolved ) : ?>
+							<div class="pencil-admin__confirm" data-bulk-confirm hidden data-text-one="<?php esc_attr_e( 'Delete 1 comment permanently? This cannot be undone.', 'pencilino' ); ?>" data-text-many="<?php
+								/* translators: %d: number of comments that will be deleted */
+								esc_attr_e( 'Delete %d comments permanently? This cannot be undone.', 'pencilino' );
+							?>">
+								<p data-bulk-confirm-text></p>
+								<button type="button" class="pencil-admin__edit" data-bulk-cancel><?php esc_html_e( 'Cancel', 'pencilino' ); ?></button>
+								<button type="submit" form="pencil-bulk-form" name="bulk_action" value="delete" class="pencil-admin__edit pencil-admin__edit--danger"><?php esc_html_e( 'Yes, delete', 'pencilino' ); ?></button>
+							</div>
+						<?php endif; ?>
+
+						<div class="pencil-admin__bulk" data-bulk-bar data-undo-label="<?php esc_attr_e( 'Undo', 'pencilino' ); ?>" data-total="<?php echo esc_attr( $total ); ?>" data-total-text="<?php echo esc_attr( number_format_i18n( $total ) ); ?>" data-label-none="<?php echo esc_attr( sprintf( /* translators: %s: number of comments. */ __( 'Select all %s', 'pencilino' ), number_format_i18n( $total ) ) ); ?>" data-label-some="<?php esc_attr_e( '%d selected', 'pencilino' ); ?>" data-label-all="<?php echo esc_attr( sprintf( /* translators: %s: number of comments. */ __( 'All %s selected', 'pencilino' ), number_format_i18n( $total ) ) ); ?>">
+							<label class="pencil-admin__check"><input type="checkbox" data-bulk-all> <span data-bulk-label><?php echo esc_html( sprintf( /* translators: %s: number of comments. */ __( 'Select all %s', 'pencilino' ), number_format_i18n( $total ) ) ); ?></span></label>
+							<span class="pencil-admin__bulk-spacer"></span>
+							<?php if ( ! $resolved ) : ?>
+								<button type="submit" form="pencil-bulk-form" name="bulk_action" value="resolve" class="pencil-admin__edit" data-when="some" hidden><?php esc_html_e( 'Resolve selected', 'pencilino' ); ?></button>
+							<?php else : ?>
+								<button type="submit" form="pencil-bulk-form" name="bulk_action" value="reopen" class="pencil-admin__edit" data-when="some" hidden><?php esc_html_e( 'Reopen selected', 'pencilino' ); ?></button>
+								<button type="button" class="pencil-admin__edit pencil-admin__edit--danger" data-when="some" data-bulk-delete hidden><?php esc_html_e( 'Delete selected', 'pencilino' ); ?></button>
+							<?php endif; ?>
+						</div>
+					<?php endif; ?>
+
 					<ul class="pencil-admin__list">
 						<?php
 						foreach ( $rows as $row ) :
@@ -106,13 +185,21 @@ final class Pencil_Admin_Changelog {
 							}
 							$when_markup = sprintf( '<span class="pencil-admin__when">%s</span>', esc_html( $when ) );
 							?>
-							<li class="pencil-admin__record">
+							<li class="pencil-admin__record" data-comment-row>
 								<div class="pencil-admin__record-head">
-									<strong class="pencil-admin__field"><?php echo esc_html( $target['label'] ?? __( 'Page element', 'pencilino' ) ); ?></strong>
+									<div class="pencil-admin__record-title">
+										<?php if ( $can_manage ) : ?>
+											<label class="pencil-admin__check"><span class="screen-reader-text"><?php esc_html_e( 'Select comment', 'pencilino' ); ?></span><input type="checkbox" name="ids[]" value="<?php echo absint( $row->comment_id ); ?>" form="pencil-bulk-form" data-bulk-row></label>
+										<?php endif; ?>
+										<strong class="pencil-admin__field"><?php echo esc_html( $target['label'] ?? __( 'Page element', 'pencilino' ) ); ?></strong>
+									</div>
 									<div class="pencil-admin__actions">
 										<a class="pencil-admin__edit" href="<?php echo esc_url( add_query_arg( array( 'pencil-edit' => '1', 'pencil-comment' => $row->comment_id ), $row->page_url ) ); ?>"><?php esc_html_e( 'View', 'pencilino' ); ?></a>
-										<?php if ( Pencil_Client::can_manage() ) : ?>
+										<?php if ( $can_manage ) : ?>
 											<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="pencil_resolve_comment"><input type="hidden" name="comment_id" value="<?php echo absint( $row->comment_id ); ?>"><input type="hidden" name="resolved" value="<?php echo $resolved ? '0' : '1'; ?>"><?php wp_nonce_field( 'pencil_resolve_comment_' . $row->comment_id ); ?><button class="pencil-admin__edit" type="submit"><?php echo esc_html( $resolved ? __( 'Reopen', 'pencilino' ) : __( 'Resolve', 'pencilino' ) ); ?></button></form>
+											<?php if ( $resolved ) : ?>
+												<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="pencil_delete_comment"><input type="hidden" name="comment_id" value="<?php echo absint( $row->comment_id ); ?>"><?php wp_nonce_field( 'pencil_delete_comment_' . $row->comment_id ); ?><button class="pencil-admin__edit pencil-admin__edit--danger" type="submit"><?php esc_html_e( 'Delete', 'pencilino' ); ?></button></form>
+											<?php endif; ?>
 										<?php endif; ?>
 									</div>
 								</div>

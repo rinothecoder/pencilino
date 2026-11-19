@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<wpml-config>
+	<admin-texts>
+		<key name="pencil_values">
+			<key name="*" />
+		</key>
+	</admin-texts>
+</wpml-config>

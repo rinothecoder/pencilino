@@ -99,6 +99,92 @@
 
 	toolbar.hidden = false;
 
+	// Drag the whole bubble (Edit and Dev) out of the way. The spot is remembered in this browser.
+	( () => {
+		const KEY = 'pencilToolbarPos';
+		let drag = null;
+		let suppress = false;
+		const place = ( x, y ) => {
+			const w = toolbar.offsetWidth;
+			const h = toolbar.offsetHeight;
+			toolbar.style.transform = 'none';
+			toolbar.style.right = 'auto';
+			toolbar.style.bottom = 'auto';
+			toolbar.style.left = Math.min( Math.max( 8, x ), Math.max( 8, window.innerWidth - w - 8 ) ) + 'px';
+			toolbar.style.top = Math.min( Math.max( 8, y ), Math.max( 8, window.innerHeight - h - 8 ) ) + 'px';
+		};
+		const remember = () => {
+			const r = toolbar.getBoundingClientRect();
+			try {
+				window.localStorage.setItem( KEY, JSON.stringify( { x: Math.round( r.left ), y: Math.round( r.top ) } ) );
+			} catch ( e ) {}
+		};
+		try {
+			const saved = JSON.parse( window.localStorage.getItem( KEY ) || 'null' );
+			if ( saved && typeof saved.x === 'number' && typeof saved.y === 'number' ) {
+				place( saved.x, saved.y );
+			}
+		} catch ( e ) {}
+
+		toolbar.addEventListener( 'pointerdown', ( event ) => {
+			if ( event.button !== 0 ) {
+				return;
+			}
+			const r = toolbar.getBoundingClientRect();
+			drag = { sx: event.clientX, sy: event.clientY, dx: event.clientX - r.left, dy: event.clientY - r.top, moved: false, id: event.pointerId };
+		} );
+		// Listen on the window, so a fast mouse drag on desktop does not slip off the bubble.
+		window.addEventListener( 'pointermove', ( event ) => {
+			if ( ! drag || event.pointerId !== drag.id ) {
+				return;
+			}
+			// A small movement is still a click.
+			if ( ! drag.moved && Math.abs( event.clientX - drag.sx ) + Math.abs( event.clientY - drag.sy ) < 6 ) {
+				return;
+			}
+			if ( ! drag.moved ) {
+				drag.moved = true;
+				toolbar.classList.add( 'is-dragging' );
+				try {
+					toolbar.setPointerCapture( drag.id );
+				} catch ( e ) {}
+			}
+			place( event.clientX - drag.dx, event.clientY - drag.dy );
+			event.preventDefault();
+		} );
+		const stop = ( event ) => {
+			if ( ! drag || ( event && event.pointerId !== drag.id ) ) {
+				return;
+			}
+			if ( drag.moved ) {
+				suppress = true;
+				window.setTimeout( () => {
+					suppress = false;
+				}, 120 );
+				toolbar.classList.remove( 'is-dragging' );
+				remember();
+			}
+			drag = null;
+		};
+		window.addEventListener( 'pointerup', stop );
+		window.addEventListener( 'pointercancel', stop );
+
+		// Letting go after a drag must not press Edit or Dev.
+		window.addEventListener( 'click', ( event ) => {
+			if ( suppress && toolbar.contains( event.target ) ) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
+		}, true );
+
+		window.addEventListener( 'resize', () => {
+			if ( toolbar.style.top ) {
+				const r = toolbar.getBoundingClientRect();
+				place( r.left, r.top );
+			}
+		} );
+	} )();
+
 	const fieldType = ( field ) => ( editors[ field.dataset.pencilType ] ? field.dataset.pencilType : 'text' );
 
 	// A button's editable text sits in its own span when the theme adds an icon.

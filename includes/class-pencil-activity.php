@@ -123,6 +123,58 @@ final class Pencil_Activity {
 	}
 
 	/**
+	 * Filtered, paged read of the activity log, newest first. Used by the list-changes ability.
+	 *
+	 * @param array $args limit, before_id, field_id (exact, or a prefix when it ends in *), user_name, page_id, since, until (UTC, Y-m-d or Y-m-d H:i:s).
+	 * @return array<int, object> Up to limit + 1 rows, so the caller can tell whether more exist.
+	 */
+	public static function query( $args = array() ) {
+		global $wpdb;
+
+		$limit = min( 200, max( 1, absint( isset( $args['limit'] ) ? $args['limit'] : 50 ) ) );
+		$where = array();
+		$vals  = array( self::table_name() );
+
+		if ( ! empty( $args['before_id'] ) ) {
+			$where[] = 'activity_id < %d';
+			$vals[]  = absint( $args['before_id'] );
+		}
+		if ( ! empty( $args['field_id'] ) ) {
+			$field = (string) $args['field_id'];
+			if ( '*' === substr( $field, -1 ) ) {
+				$where[] = 'field_id LIKE %s';
+				$vals[]  = $wpdb->esc_like( substr( $field, 0, -1 ) ) . '%';
+			} else {
+				$where[] = 'field_id = %s';
+				$vals[]  = $field;
+			}
+		}
+		if ( ! empty( $args['user_name'] ) ) {
+			$where[] = 'user_name = %s';
+			$vals[]  = (string) $args['user_name'];
+		}
+		if ( ! empty( $args['page_id'] ) ) {
+			$where[] = 'page_id = %d';
+			$vals[]  = absint( $args['page_id'] );
+		}
+		if ( ! empty( $args['since'] ) ) {
+			$where[] = 'created_at >= %s';
+			$vals[]  = (string) $args['since'];
+		}
+		if ( ! empty( $args['until'] ) ) {
+			$until   = (string) $args['until'];
+			$where[] = 'created_at <= %s';
+			$vals[]  = strlen( $until ) <= 10 ? $until . ' 23:59:59' : $until;
+		}
+
+		$sql    = 'SELECT * FROM %i' . ( $where ? ' WHERE ' . implode( ' AND ', $where ) : '' ) . ' ORDER BY created_at DESC, activity_id DESC LIMIT %d';
+		$vals[] = $limit + 1;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- Custom activity-log table; the WHERE parts are fixed strings with placeholders.
+		return $wpdb->get_results( $wpdb->prepare( $sql, $vals ) );
+	}
+
+	/**
 	 * Return the newest activity records.
 	 *
 	 * @param int $limit Maximum number of records.

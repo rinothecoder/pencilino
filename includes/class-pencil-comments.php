@@ -13,6 +13,9 @@ final class Pencil_Comments {
 		add_action( 'init', array( __CLASS__, 'maybe_install' ), 5 );
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
 		add_action( 'admin_post_pencil_resolve_comment', array( __CLASS__, 'admin_resolve' ) );
+		add_action( 'admin_post_pencil_bulk_comments', array( __CLASS__, 'admin_bulk' ) );
+		add_action( 'admin_post_pencil_delete_comment', array( __CLASS__, 'admin_delete' ) );
+		add_action( 'admin_post_pencil_undo_comments', array( __CLASS__, 'admin_undo' ) );
 	}
 
 	public static function table_name() {
@@ -254,13 +257,173 @@ final class Pencil_Comments {
 		if ( is_wp_error( $result ) ) {
 			wp_die( esc_html( $result->get_error_message() ) );
 		}
-		wp_safe_redirect( add_query_arg( array( 'page' => Pencil_Admin::MENU_SLUG, 'pencil-comment-status' => ! empty( $_POST['resolved'] ) ? 'resolved' : 'open' ), admin_url( 'admin.php' ) ) . '#comments' );
+		$resolve = ! empty( $_POST['resolved'] );
+		set_transient( self::undo_key(), array( 'action' => $resolve ? 'resolve' : 'reopen', 'ids' => array( $id ) ), 10 * MINUTE_IN_SECONDS );
+		if ( ! empty( $_POST['ajax'] ) ) {
+			self::json_done( $resolve ? 'resolve' : 'reopen', 1 );
+		}
+		self::back( $resolve ? 'open' : 'resolved', array( 'pencil-comment-done' => $resolve ? 'resolve' : 'reopen', 'pencil-comment-count' => 1 ) );
+	}
+
+	/** Number of comments with the given status (resolved or open). */
+	public static function count_status( $resolved ) {
+		global $wpdb;
+		if ( $resolved ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private inbox count.
+			return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE resolved_at IS NOT NULL', self::table_name() ) );
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private inbox count.
+		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE resolved_at IS NULL', self::table_name() ) );
+	}
+
+	/**
+	 * IDs of comments with the given status. With $ids only those of them that match; with null all.
+	 * A bulk action only ever touches comments in the status it is meant for (delete: resolved only).
+	 */
+	private static function ids_with_status( $resolved, $ids = null ) {
+		global $wpdb;
+		if ( null === $ids ) {
+			if ( $resolved ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private inbox ids.
+				$found = $wpdb->get_col( $wpdb->prepare( 'SELECT comment_id FROM %i WHERE resolved_at IS NOT NULL', self::table_name() ) );
+			} else {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Private inbox ids.
+				$found = $wpdb->get_col( $wpdb->prepare( 'SELECT comment_id FROM %i WHERE resolved_at IS NULL', self::table_name() ) );
+			}
+			return array_map( 'absint', (array) $found );
+		}
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $ids ) ) ) );
+		if ( ! $ids ) {
+			return array();
+		}
+		$marks = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$args  = array_merge( array( self::table_name() ), $ids );
+		if ( $resolved ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- One placeholder per id.
+			$found = $wpdb->get_col( $wpdb->prepare( 'SELECT comment_id FROM %i WHERE resolved_at IS NOT NULL AND comment_id IN (' . $marks . ')', $args ) );
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- One placeholder per id.
+			$found = $wpdb->get_col( $wpdb->prepare( 'SELECT comment_id FROM %i WHERE resolved_at IS NULL AND comment_id IN (' . $marks . ')', $args ) );
+		}
+		return array_map( 'absint', (array) $found );
+	}
+
+	/** Resolve, reopen or delete the given comments in chunks. Returns how many were changed. */
+	private static function apply_bulk( $action, $ids ) {
+		global $wpdb;
+		$done = 0;
+		foreach ( array_chunk( $ids, 500 ) as $chunk ) {
+			$marks = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+			if ( 'delete' === $action ) {
+				$sql  = 'DELETE FROM %i WHERE comment_id IN (' . $marks . ')';
+				$args = array_merge( array( self::table_name() ), $chunk );
+			} elseif ( 'resolve' === $action ) {
+				$sql  = 'UPDATE %i SET resolved_at = %s, resolved_by = %d WHERE comment_id IN (' . $marks . ')';
+				$args = array_merge( array( self::table_name(), current_time( 'mysql', true ), get_current_user_id() ), $chunk );
+			} else {
+				$sql  = 'UPDATE %i SET resolved_at = NULL, resolved_by = 0 WHERE comment_id IN (' . $marks . ')';
+				$args = array_merge( array( self::table_name() ), $chunk );
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, PluginCheck.Security.DirectDB.UnescapedDBParameter -- Fixed SQL with one placeholder per id.
+			$done += (int) $wpdb->query( $wpdb->prepare( $sql, $args ) );
+		}
+		return $done;
+	}
+
+	public static function undo_key() {
+		return 'pencil_undo_comments_' . get_current_user_id();
+	}
+
+	/** True while the last bulk resolve or reopen of this user can still be undone. */
+	public static function has_undo() {
+		$saved = get_transient( self::undo_key() );
+		return is_array( $saved ) && ! empty( $saved['ids'] );
+	}
+
+	private static function back( $status, $args = array() ) {
+		wp_safe_redirect( add_query_arg( array_merge( array( 'page' => Pencil_Admin::MENU_SLUG, 'pencil-comment-status' => $status ), $args ), admin_url( 'admin.php' ) ) . '#comments' );
 		exit;
+	}
+
+	/** Answer a background request from the inbox with the new counts, instead of redirecting. */
+	private static function json_done( $action, $count ) {
+		$open     = self::count_status( false );
+		$resolved = self::count_status( true );
+		wp_send_json_success(
+			array(
+				'message'       => Pencil_Admin_Changelog::bulk_notice( $action, $count ),
+				'undo'          => ( 'delete' !== $action && $count > 0 ) ? wp_create_nonce( 'pencil_undo_comments' ) : '',
+				'open'          => $open,
+				'resolved'      => $resolved,
+				'open_text'     => number_format_i18n( $open ),
+				'resolved_text' => number_format_i18n( $resolved ),
+			)
+		);
+	}
+
+	/** Resolve or reopen the ticked comments, or every comment of the current status. Only administrators. */
+	public static function admin_bulk() {
+		if ( ! Pencil_Client::can_manage() ) {
+			wp_die( esc_html__( 'You cannot change comments.', 'pencilino' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'pencil_bulk_comments' );
+		$action = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
+		if ( ! in_array( $action, array( 'resolve', 'reopen', 'delete' ), true ) ) {
+			self::back( 'open' );
+		}
+		// Reopen and delete work on resolved comments; resolve works on open ones.
+		$from_resolved = 'resolve' !== $action;
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Mapped to integers.
+		$picked = isset( $_POST['ids'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['ids'] ) ) : array();
+		$ids    = self::ids_with_status( $from_resolved, ! empty( $_POST['select_all'] ) ? null : $picked );
+		$done   = $ids ? self::apply_bulk( $action, $ids ) : 0;
+		if ( $ids && 'delete' !== $action ) {
+			set_transient( self::undo_key(), array( 'action' => $action, 'ids' => $ids ), 10 * MINUTE_IN_SECONDS );
+		} else {
+			delete_transient( self::undo_key() );
+		}
+		self::back( $from_resolved ? 'resolved' : 'open', array( 'pencil-comment-done' => $action, 'pencil-comment-count' => $done ) );
+	}
+
+	/** Delete one resolved comment for good. Only administrators. */
+	public static function admin_delete() {
+		if ( ! Pencil_Client::can_manage() ) {
+			wp_die( esc_html__( 'You cannot delete comments.', 'pencilino' ), '', array( 'response' => 403 ) );
+		}
+		$id = isset( $_POST['comment_id'] ) ? absint( $_POST['comment_id'] ) : 0;
+		check_admin_referer( 'pencil_delete_comment_' . $id );
+		$ids  = self::ids_with_status( true, array( $id ) );
+		$done = $ids ? self::apply_bulk( 'delete', $ids ) : 0;
+		if ( ! empty( $_POST['ajax'] ) ) {
+			self::json_done( 'delete', $done );
+		}
+		self::back( 'resolved', array( 'pencil-comment-done' => 'delete', 'pencil-comment-count' => $done ) );
+	}
+
+	/** Undo the last bulk resolve or reopen. Delete cannot be undone. */
+	public static function admin_undo() {
+		if ( ! Pencil_Client::can_manage() ) {
+			wp_die( esc_html__( 'You cannot change comments.', 'pencilino' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'pencil_undo_comments' );
+		$saved = get_transient( self::undo_key() );
+		delete_transient( self::undo_key() );
+		if ( ! is_array( $saved ) || empty( $saved['ids'] ) || ! in_array( $saved['action'], array( 'resolve', 'reopen' ), true ) ) {
+			self::back( 'open' );
+		}
+		$was_resolve = 'resolve' === $saved['action'];
+		$ids         = self::ids_with_status( $was_resolve, $saved['ids'] );
+		$done        = $ids ? self::apply_bulk( $was_resolve ? 'reopen' : 'resolve', $ids ) : 0;
+		self::back( $was_resolve ? 'open' : 'resolved', array( 'pencil-comment-done' => 'undo', 'pencil-comment-count' => $done ) );
 	}
 
 	public static function inbox( $resolved = false, $page = 1 ) {
 		global $wpdb;
 		$offset = ( max( 1, absint( $page ) ) - 1 ) * 50;
+		if ( null === $resolved ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Paginated private inbox reads every status.
+			return $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i ORDER BY comment_id DESC LIMIT 51 OFFSET %d', self::table_name(), $offset ) );
+		}
 		if ( $resolved ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Paginated private inbox reads current status.
 			return $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE resolved_at IS NOT NULL ORDER BY comment_id DESC LIMIT 51 OFFSET %d', self::table_name(), $offset ) );

@@ -91,7 +91,7 @@ html.pencil-dev-active .pencil-toolbar__dev .dashicons {
 
 .pencil-dev-panel {
 	position: fixed;
-	z-index: 2147482999;
+	z-index: 2147483001;
 	top: 48px;
 	right: 16px;
 	width: 340px;

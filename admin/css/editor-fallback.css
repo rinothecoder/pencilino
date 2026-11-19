@@ -1,0 +1,68 @@
+/*
+ * Pencilino fallback styles for the block editor.
+ * Loaded only when the active theme brings no editor styles of its own.
+ * Without it the editor falls back to the browser's default serif font.
+ */
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-size: 18px;
+	line-height: 1.65;
+	color: #1e1e1e;
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.wp-block-post-title,
+.editor-post-title__input {
+	font-family: inherit;
+	font-weight: 700;
+	line-height: 1.2;
+	color: #111;
+}
+
+h1,
+.wp-block-post-title,
+.editor-post-title__input {
+	font-size: 2.5rem;
+}
+
+h2 { font-size: 2rem; }
+h3 { font-size: 1.5rem; }
+h4 { font-size: 1.25rem; }
+h5,
+h6 { font-size: 1.1rem; }
+
+p,
+li {
+	font-family: inherit;
+}
+
+li + li {
+	margin-top: 0.25em;
+}
+
+a {
+	color: #7c3aed;
+}
+
+blockquote {
+	margin-left: 0;
+	padding-left: 1.25em;
+	border-left: 3px solid #d9d4e6;
+	font-style: italic;
+}
+
+figcaption,
+.wp-element-caption {
+	font-size: 0.85em;
+	color: #666;
+}
+
+.wp-block {
+	max-width: 720px;
+}

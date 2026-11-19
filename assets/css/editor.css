@@ -54,6 +54,18 @@ html.pencil-selection-active #wpadminbar {
 	background: rgba(253, 252, 254, 0.82);
 }
 
+/* The bubble can be dragged out of the way, on every screen size. */
+.pencil-toolbar {
+	touch-action: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.pencil-toolbar.is-dragging,
+.pencil-toolbar.is-dragging * {
+	cursor: grabbing;
+}
+
 .pencil-toolbar:focus-within {
 	box-shadow: 0 16px 38px rgba(33, 26, 52, 0.18), 0 2px 8px rgba(33, 26, 52, 0.08), 0 0 0 3px var(--pencil-focus);
 }

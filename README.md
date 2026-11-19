@@ -21,7 +21,8 @@ Pencilino is made for custom WordPress themes built by an AI coding agent such a
 - AI instructions per topic, with your own additions. A connected agent reads them with the `pencilino/get-instructions` ability.
 - A clean-up prompt that checks the whole site against the instructions.
 - Dev mode: inspect classes, spot hard-coded values and adjust spacing.
-- Templates overview, change log, access per role and a simple SEO box.
+- Templates overview, change log and access per role.
+- Works with your SEO plugin: Rank Math and Yoast SEO get the text of your real pages for their content checks.
 
 Visitors never load Pencilino, so it does not make your website slower.
 

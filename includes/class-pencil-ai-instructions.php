@@ -31,14 +31,14 @@ final class Pencil_AI_Instructions {
 				'problem'     => __( 'AI often hard-codes the text and images in the templates, so a client cannot change anything without a developer.', 'pencilino' ),
 				'lead'        => __( 'The agent starts from your idea or from your own HTML template, builds the theme, and hands all static content to Pencilino. You and your clients then edit text, buttons and images right on the website. The site keeps working, and shows its content, even when the plugin is switched off.', 'pencilino' ),
 				'placeholder' => __( 'Example: Make every heading, text and button editable, also in the footer.', 'pencilino' ),
-				'headings'    => array( 'Role', 'Choose the starting path', 'Pencilino theme compatibility contract', 'Pencilino v2 client workflow', 'Hidden states for editors', 'Required safe theme integration', 'Content continuity', 'Non-negotiable rules', 'Decide who owns content before writing code', 'Pencilino-owned content' ),
+				'headings'    => array( 'Role', 'Choose the starting path', 'Site functionality outside the theme', 'Pencilino theme compatibility contract', 'Pencilino v2 client workflow', 'Hidden states for editors', 'Required safe theme integration', 'Content continuity', 'Non-negotiable rules', 'Decide who owns content before writing code', 'Pencilino-owned content' ),
 			),
 			'templates'   => array(
 				'title'       => __( 'Templates', 'pencilino' ),
 				'problem'     => __( 'Agents often paste the header and footer into every page, or forget the 404, search and blog templates. Those then fall back to the plain WordPress look.', 'pencilino' ),
-				'lead'        => __( 'One shared header and footer for the whole site, repeated sections in one file, and a 404, search and blog template in your design.', 'pencilino' ),
+				'lead'        => __( 'One shared header and footer for the whole site, repeated sections in one file, components for designs that repeat (like a team card), and a 404, search and blog template in your design.', 'pencilino' ),
 				'placeholder' => __( 'Example: Always add a simple landing page template without a menu.', 'pencilino' ),
-				'headings'    => array( 'Shared parts: header, footer and repeated sections', 'Templates beyond the pages' ),
+				'headings'    => array( 'Shared parts and components', 'Templates beyond the pages' ),
 			),
 			'structure'   => array(
 				'title'       => __( 'Pages and site basics', 'pencilino' ),
@@ -85,18 +85,8 @@ final class Pencil_AI_Instructions {
 			),
 			'seo'         => array(
 				'title'       => __( 'SEO', 'pencilino' ),
-				'problem'     => __( 'Pencilino pages keep their content in the theme, so SEO plugins like Yoast and Rank Math see an empty page. Google does not mind, but those plugins do.', 'pencilino' ),
-				'lead'        => __( 'The agent first checks whether your site already has an SEO plugin, then follows one of two paths. Either way, every page gets one main heading and every image gets alt text.', 'pencilino' ),
-				'paths'       => array(
-					'A' => array(
-						'title' => __( 'You have an SEO plugin', 'pencilino' ),
-						'text'  => __( 'The plugin owns your titles, descriptions and sitemap. The agent only gives it the text of your pages, so its content checks work, and it prints no SEO tags itself.', 'pencilino' ),
-					),
-					'B' => array(
-						'title' => __( 'You have no SEO plugin', 'pencilino' ),
-						'text'  => __( 'Pencilino adds an SEO box to every page and post with a title and a meta description. The agent fills it in from the real page content.', 'pencilino' ),
-					),
-				),
+				'problem'     => __( 'Pencilino pages keep their content in the theme, so the content checks of SEO plugins like Yoast and Rank Math see an empty page. Google does not mind, but those plugins do.', 'pencilino' ),
+				'lead'        => __( 'Your SEO plugin does the SEO. The agent asks which one you want and installs it, and builds the theme so any SEO plugin can take over, also one you install later. Pencilino gives Yoast and Rank Math the text of your real pages, so their checks work. Every page gets one main heading and every image gets alt text.', 'pencilino' ),
 				'placeholder' => __( 'Example: Write SEO titles in Dutch and keep them under 55 characters.', 'pencilino' ),
 				'headings'    => array( 'SEO' ),
 			),

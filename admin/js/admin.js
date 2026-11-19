@@ -21,6 +21,7 @@
 		changes: { tab: 'activity', sub: 'changes' },
 		comments: { tab: 'activity', sub: 'comments' },
 		'settings-overview': { tab: 'settings', sub: 'overview' },
+		'settings-access': { tab: 'settings', sub: 'access' },
 		'settings-focus': { tab: 'settings', sub: 'focus' },
 		'settings-dev': { tab: 'settings', sub: 'dev' },
 		'settings-framework': { tab: 'ai-instructions', sub: 'cleanup' },
@@ -314,4 +315,219 @@
 		button.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
 		button.textContent = button.getAttribute( open ? 'data-less' : 'data-more' );
 	} );
+}() );
+
+/* Comments: select, resolve, reopen and delete in bulk. */
+( function () {
+	'use strict';
+
+	var form = document.getElementById( 'pencil-bulk-form' );
+	var bar  = document.querySelector( '[data-bulk-bar]' );
+
+	// Drop the one-time result message from the URL so a reload does not repeat it.
+	var current = new URL( window.location.href );
+	if ( current.searchParams.has( 'pencil-comment-done' ) ) {
+		current.searchParams.delete( 'pencil-comment-done' );
+		current.searchParams.delete( 'pencil-comment-count' );
+		window.history.replaceState( null, '', current.toString() );
+	}
+
+	if ( ! form || ! bar ) {
+		return;
+	}
+
+	var master  = bar.querySelector( '[data-bulk-all]' );
+	var label   = bar.querySelector( '[data-bulk-label]' );
+	var flag    = form.querySelector( '[name="select_all"]' );
+	var confirm = document.querySelector( '[data-bulk-confirm]' );
+	var total   = parseInt( bar.getAttribute( 'data-total' ), 10 ) || 0;
+
+	function rows() {
+		return document.querySelectorAll( '[data-bulk-row]' );
+	}
+
+	function format( text, number ) {
+		return text.replace( '%d', number.toLocaleString() );
+	}
+
+	function update() {
+		var all      = rows();
+		var ticked   = 0;
+		var everyone = flag.value === '1';
+
+		all.forEach( function ( box ) {
+			if ( box.checked ) {
+				ticked++;
+			}
+		} );
+
+		var count = everyone ? total : ticked;
+
+		master.checked       = all.length > 0 && ticked === all.length;
+		master.indeterminate = ticked > 0 && ticked < all.length;
+		bar.classList.toggle( 'pencil-admin__bulk--active', count > 0 );
+
+		if ( ! count ) {
+			label.textContent = bar.getAttribute( 'data-label-none' );
+		} else if ( everyone ) {
+			label.textContent = bar.getAttribute( 'data-label-all' );
+		} else {
+			label.textContent = format( bar.getAttribute( 'data-label-some' ), ticked );
+		}
+
+		bar.querySelectorAll( '[data-when]' ).forEach( function ( button ) {
+			button.hidden = ( button.getAttribute( 'data-when' ) === 'some' ) !== ( count > 0 );
+		} );
+	}
+
+	function closeConfirm() {
+		if ( confirm ) {
+			confirm.hidden = true;
+		}
+	}
+
+	// Select all covers every comment with this status, on every page.
+	master.addEventListener( 'change', function () {
+		flag.value = master.checked ? '1' : '0';
+		rows().forEach( function ( box ) {
+			box.checked = master.checked;
+		} );
+		closeConfirm();
+		update();
+	} );
+
+	document.addEventListener( 'change', function ( event ) {
+		if ( event.target.matches && event.target.matches( '[data-bulk-row]' ) ) {
+			// Picking single comments after Select all means only the ticked ones.
+			flag.value = '0';
+			closeConfirm();
+			update();
+		}
+	} );
+
+	// Delete asks first, in a bar on the page.
+	bar.querySelectorAll( '[data-bulk-delete]' ).forEach( function ( button ) {
+		button.addEventListener( 'click', function () {
+			if ( ! confirm ) {
+				return;
+			}
+			var count = flag.value === '1' ? total : document.querySelectorAll( '[data-bulk-row]:checked' ).length;
+			confirm.querySelector( '[data-bulk-confirm-text]' ).textContent = count === 1 ? confirm.getAttribute( 'data-text-one' ) : format( confirm.getAttribute( 'data-text-many' ), count );
+			confirm.hidden = false;
+			update();
+		} );
+	} );
+
+	if ( confirm ) {
+		confirm.querySelector( '[data-bulk-cancel]' ).addEventListener( 'click', function () {
+			flag.value = '0';
+			closeConfirm();
+			update();
+		} );
+	}
+
+
+	// One comment at a time: Resolve, Reopen and Delete save in the background and update the page.
+	function showNotice( data, actionUrl ) {
+		var old = document.querySelector( '[data-pencil-notice]' );
+		if ( old ) {
+			old.remove();
+		}
+		var box = document.createElement( 'div' );
+		box.className = 'pencil-admin__notice';
+		box.setAttribute( 'role', 'status' );
+		box.setAttribute( 'data-pencil-notice', '' );
+		var text = document.createElement( 'span' );
+		text.textContent = data.message;
+		box.appendChild( text );
+		if ( data.undo ) {
+			var undo = document.createElement( 'form' );
+			undo.method = 'post';
+			undo.setAttribute( 'action', actionUrl );
+			[ [ 'action', 'pencil_undo_comments' ], [ '_wpnonce', data.undo ] ].forEach( function ( pair ) {
+				var field = document.createElement( 'input' );
+				field.type = 'hidden';
+				field.name = pair[ 0 ];
+				field.value = pair[ 1 ];
+				undo.appendChild( field );
+			} );
+			var button = document.createElement( 'button' );
+			button.type = 'submit';
+			button.className = 'pencil-admin__linkbutton';
+			button.textContent = bar.getAttribute( 'data-undo-label' ) || 'Undo';
+			undo.appendChild( button );
+			box.appendChild( undo );
+		}
+		var filters = document.querySelector( '[data-comment-filter]' );
+		if ( filters && filters.parentNode ) {
+			filters.parentNode.parentNode.insertBefore( box, filters.parentNode );
+		}
+	}
+
+	function setCounts( data ) {
+		document.querySelectorAll( '[data-comment-filter]' ).forEach( function ( link ) {
+			var text = link.getAttribute( 'data-comment-filter' ) === 'open' ? data.open_text : data.resolved_text;
+			link.textContent = link.textContent.replace( /\(.*\)\s*$/, '(' + text + ')' );
+		} );
+		var current = flag.value === '1';
+		var was = bar.getAttribute( 'data-total-text' );
+		var isResolved = !! document.querySelector( '[data-comment-filter="resolved"].pencil-admin__edit--active' );
+		total = isResolved ? data.resolved : data.open;
+		var now = isResolved ? data.resolved_text : data.open_text;
+		[ 'data-label-none', 'data-label-all' ].forEach( function ( name ) {
+			bar.setAttribute( name, bar.getAttribute( name ).replace( was, now ) );
+		} );
+		bar.setAttribute( 'data-total', total );
+		bar.setAttribute( 'data-total-text', now );
+		if ( current && ! total ) {
+			flag.value = '0';
+		}
+	}
+
+	document.addEventListener( 'submit', function ( event ) {
+		var single = event.target;
+		var row    = single.closest ? single.closest( '[data-comment-row]' ) : null;
+		var kind   = single.elements && single.elements.action ? single.elements.action.value : '';
+		if ( ! row || ( kind !== 'pencil_resolve_comment' && kind !== 'pencil_delete_comment' ) || ! window.fetch || ! window.FormData ) {
+			return;
+		}
+
+		event.preventDefault();
+		var button = single.querySelector( 'button[type="submit"]' );
+		var body   = new FormData( single );
+		body.append( 'ajax', '1' );
+		if ( button ) {
+			button.disabled = true;
+		}
+
+		window.fetch( single.getAttribute( 'action' ), { method: 'POST', body: body, credentials: 'same-origin' } )
+			.then( function ( response ) {
+				return response.json();
+			} )
+			.then( function ( result ) {
+				if ( ! result || ! result.success ) {
+					throw new Error( 'failed' );
+				}
+				row.classList.add( 'pencil-admin__record--leaving' );
+				window.setTimeout( function () {
+					row.remove();
+					if ( ! rows().length ) {
+						// Last one on this page: reload so the empty state or the next page shows.
+						var next = new URL( window.location.href );
+						next.searchParams.set( 'pencil-comment-done', kind === 'pencil_delete_comment' ? 'delete' : ( document.querySelector( '[data-comment-filter="resolved"].pencil-admin__edit--active' ) ? 'reopen' : 'resolve' ) );
+						next.searchParams.set( 'pencil-comment-count', '1' );
+						window.location.assign( next.toString() );
+						return;
+					}
+					setCounts( result.data );
+					showNotice( result.data, single.getAttribute( 'action' ) );
+					update();
+				}, 220 );
+			} )
+			.catch( function () {
+				// Anything unexpected: do it the plain way with a page reload.
+				single.submit();
+			} );
+	} );
+	update();
 }() );
